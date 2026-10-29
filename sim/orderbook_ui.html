@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Limit Order Book Trading Terminal</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.3); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(150, 150, 150, 0.5); }
+    .depth-bar-bid { background: rgba(34, 197, 94, 0.15); }
+    .depth-bar-ask { background: rgba(239, 68, 68, 0.15); }
+  </style>
+</head>
+<body class="bg-[var(--background,#0f172a)] text-[var(--foreground,#f8fafc)] antialiased p-4 select-none min-h-screen">
+  <div class="max-w-7xl mx-auto space-y-4">
+
+    <!-- Top Header -->
+    <header class="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] shadow-sm">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-md">
+          ⚡
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-[var(--foreground,#f8fafc)] flex items-center gap-2">
+            Limit Order Book <span class="text-xs px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-mono border border-indigo-500/30">LOB-CORE v1.0</span>
+          </h1>
+          <p class="text-xs text-[var(--muted-foreground,#94a3b8)]">Deterministic Price-Time Priority Matching Engine</p>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Bar -->
+      <div class="flex items-center gap-6 text-xs font-mono">
+        <div class="text-center">
+          <span class="text-[var(--muted-foreground,#94a3b8)] uppercase block text-[11px]">Last Price</span>
+          <span id="metric-last-price" class="font-bold text-base text-yellow-400">100</span>
+        </div>
+        <div class="text-center">
+          <span class="text-[var(--muted-foreground,#94a3b8)] uppercase block text-[11px]">Spread</span>
+          <span id="metric-spread" class="font-bold text-base text-indigo-400">0</span>
+        </div>
+        <div class="text-center">
+          <span class="text-[var(--muted-foreground,#94a3b8)] uppercase block text-[11px]">Total Volume</span>
+          <span id="metric-volume" class="font-bold text-base text-emerald-400">0</span>
+        </div>
+        <div class="text-center">
+          <span class="text-[var(--muted-foreground,#94a3b8)] uppercase block text-[11px]">Total Trades</span>
+          <span id="metric-trades" class="font-bold text-base text-sky-400">0</span>
+        </div>
+      </div>
+
+      <!-- Simulator Auto-Play Controls -->
+      <div class="flex items-center gap-2">
+        <button id="btn-toggle-sim" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1.5 transition shadow">
+          <span id="sim-icon">▶</span> <span id="sim-text">Start Simulation</span>
+        </button>
+        <button id="btn-step-sim" class="px-3 py-1.5 rounded-lg border border-[var(--border,#334155)] hover:bg-[var(--sidebar,#334155)] text-xs text-[var(--foreground,#f8fafc)] transition">
+          Step
+        </button>
+        <button id="btn-reset-book" class="px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/20 text-xs text-red-400 transition">
+          Reset
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Grid: Left = Order Entry & Controls, Center = Order Book Ladder, Right = Trade Tape & Active Orders -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+      <!-- Col 1: Order Placement (3 cols) -->
+      <div class="lg:col-span-3 space-y-4">
+        <!-- Order Entry Card -->
+        <div class="p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] space-y-4 shadow-sm">
+          <div class="flex items-center justify-between border-b border-[var(--border,#334155)] pb-2.5">
+            <h2 class="text-sm font-semibold text-[var(--foreground,#f8fafc)]">Order Placement</h2>
+            <span class="text-xs text-[var(--muted-foreground,#94a3b8)]">Rule 1-9 Compliant</span>
+          </div>
+
+          <!-- Buy / Sell Toggle -->
+          <div class="grid grid-cols-2 gap-2 p-1 rounded-lg bg-[var(--background,#0f172a)] border border-[var(--border,#334155)]">
+            <button id="tab-buy" class="py-1.5 rounded-md font-bold text-xs bg-emerald-600 text-white shadow transition">
+              BUY (Bid)
+            </button>
+            <button id="tab-sell" class="py-1.5 rounded-md font-bold text-xs text-[var(--muted-foreground,#94a3b8)] hover:text-white transition">
+              SELL (Ask)
+            </button>
+          </div>
+
+          <!-- Order Type Select -->
+          <div>
+            <label class="block text-xs font-medium text-[var(--muted-foreground,#94a3b8)] mb-1">Order Type</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="type-limit" class="py-1.5 px-3 rounded-lg border border-indigo-500 bg-indigo-500/20 text-indigo-300 text-xs font-semibold">
+                LIMIT
+              </button>
+              <button id="type-market" class="py-1.5 px-3 rounded-lg border border-[var(--border,#334155)] text-[var(--muted-foreground,#94a3b8)] hover:text-white text-xs font-semibold">
+                MARKET
+              </button>
+            </div>
+          </div>
+
+          <!-- Price Input (Hidden for Market) -->
+          <div id="price-group">
+            <label class="block text-xs font-medium text-[var(--muted-foreground,#94a3b8)] mb-1">Price (Ticks)</label>
+            <div class="relative">
+              <input id="input-price" type="number" min="1" step="1" value="100" class="w-full px-3 py-2 rounded-lg bg-[var(--background,#0f172a)] border border-[var(--border,#334155)] text-sm font-mono text-[var(--foreground,#f8fafc)] focus:outline-none focus:border-indigo-500">
+              <div class="absolute right-2 top-2 flex space-x-1">
+                <button onclick="adjustPrice(-1)" class="px-1.5 py-0.5 rounded bg-[var(--card,#1e293b)] text-xs border border-[var(--border,#334155)] hover:bg-slate-700">-1</button>
+                <button onclick="adjustPrice(+1)" class="px-1.5 py-0.5 rounded bg-[var(--card,#1e293b)] text-xs border border-[var(--border,#334155)] hover:bg-slate-700">+1</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quantity Input -->
+          <div>
+            <label class="block text-xs font-medium text-[var(--muted-foreground,#94a3b8)] mb-1">Quantity (Lots)</label>
+            <input id="input-qty" type="number" min="1" step="1" value="10" class="w-full px-3 py-2 rounded-lg bg-[var(--background,#0f172a)] border border-[var(--border,#334155)] text-sm font-mono text-[var(--foreground,#f8fafc)] focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <!-- Submit Button -->
+          <button id="btn-submit-order" class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow transition">
+            SUBMIT BUY ORDER
+          </button>
+
+          <!-- Quick Action Buttons -->
+          <div class="pt-2 border-t border-[var(--border,#334155)] space-y-2">
+            <span class="text-xs text-[var(--muted-foreground,#94a3b8)] block font-medium">Quick Liquidity Injections</span>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <button onclick="injectSpreadQuotes()" class="p-1.5 rounded border border-[var(--border,#334155)] hover:bg-[var(--sidebar,#334155)] text-left">
+                + MM Quotes
+              </button>
+              <button onclick="injectMarketSweep()" class="p-1.5 rounded border border-[var(--border,#334155)] hover:bg-[var(--sidebar,#334155)] text-left">
+                ⚡ Sweep Book
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Architecture Note -->
+        <div class="p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] space-y-2 text-xs text-[var(--muted-foreground,#94a3b8)]">
+          <div class="font-semibold text-[var(--foreground,#f8fafc)] flex items-center gap-1.5">
+            <span>🛡️</span> Guaranteed Invariants
+          </div>
+          <ul class="list-disc list-inside space-y-1 text-[11px]">
+            <li>Price-Time Priority (FIFO queues)</li>
+            <li>Trades execute at resting (maker) price</li>
+            <li>Book uncrossed: Best Bid &lt; Best Ask</li>
+            <li>Strict integer mathematics (zero floats)</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Col 2: Order Book Depth Ladder (5 cols) -->
+      <div class="lg:col-span-5 p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] flex flex-col shadow-sm">
+        <div class="flex items-center justify-between border-b border-[var(--border,#334155)] pb-2 mb-3">
+          <h2 class="text-sm font-semibold text-[var(--foreground,#f8fafc)] flex items-center gap-2">
+            Order Book Ladder (Level 2 Depth)
+          </h2>
+          <span class="text-xs font-mono text-[var(--muted-foreground,#94a3b8)]">Ticks / Lots</span>
+        </div>
+
+        <!-- Table Headers -->
+        <div class="grid grid-cols-3 text-xs font-medium text-[var(--muted-foreground,#94a3b8)] px-2 py-1 border-b border-[var(--border,#334155)]">
+          <div>Orders / Depth</div>
+          <div class="text-right">Price (Ticks)</div>
+          <div class="text-right">Level Qty</div>
+        </div>
+
+        <!-- Asks Container (Top, scroll to bottom) -->
+        <div id="asks-container" class="space-y-0.5 overflow-y-auto max-h-56 min-h-[140px] flex flex-col justify-end py-1">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- Spread Divider -->
+        <div class="my-2 py-2 px-3 rounded-lg bg-[var(--background,#0f172a)] border border-[var(--border,#334155)] flex items-center justify-between text-xs font-mono">
+          <span class="text-[var(--muted-foreground,#94a3b8)] flex items-center gap-1.5">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            Market Spread
+          </span>
+          <span id="ladder-spread" class="font-bold text-indigo-400">Spread: --</span>
+        </div>
+
+        <!-- Bids Container (Bottom, scroll from top) -->
+        <div id="bids-container" class="space-y-0.5 overflow-y-auto max-h-56 min-h-[140px] py-1">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- Col 3: Trade Tape & Active Orders (4 cols) -->
+      <div class="lg:col-span-4 space-y-4">
+        <!-- Live Execution Tape -->
+        <div class="p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] flex flex-col shadow-sm h-72">
+          <div class="flex items-center justify-between border-b border-[var(--border,#334155)] pb-2 mb-2">
+            <h2 class="text-sm font-semibold text-[var(--foreground,#f8fafc)] flex items-center gap-2">
+              <span>📜</span> Execution Tape
+            </h2>
+            <span class="text-xs text-[var(--muted-foreground,#94a3b8)]">Live Fills</span>
+          </div>
+
+          <div class="grid grid-cols-4 text-[11px] font-medium text-[var(--muted-foreground,#94a3b8)] px-2 py-1 border-b border-[var(--border,#334155)]">
+            <div>Trade #</div>
+            <div class="text-right">Price</div>
+            <div class="text-right">Qty</div>
+            <div class="text-right">Maker Side</div>
+          </div>
+
+          <div id="trades-container" class="space-y-1 overflow-y-auto flex-1 font-mono text-xs py-1">
+            <div class="text-center text-[var(--muted-foreground,#94a3b8)] py-8 text-xs italic">Awaiting executions...</div>
+          </div>
+        </div>
+
+        <!-- Active Orders & Cancellation Panel -->
+        <div class="p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] flex flex-col shadow-sm h-72">
+          <div class="flex items-center justify-between border-b border-[var(--border,#334155)] pb-2 mb-2">
+            <h2 class="text-sm font-semibold text-[var(--foreground,#f8fafc)] flex items-center gap-2">
+              <span>📑</span> Resting Orders
+            </h2>
+            <span id="active-orders-count" class="text-xs text-[var(--muted-foreground,#94a3b8)]">0 active</span>
+          </div>
+
+          <div class="grid grid-cols-4 text-[11px] font-medium text-[var(--muted-foreground,#94a3b8)] px-2 py-1 border-b border-[var(--border,#334155)]">
+            <div>ID</div>
+            <div>Side</div>
+            <div>Price</div>
+            <div class="text-right">Action</div>
+          </div>
+
+          <div id="active-orders-container" class="space-y-1 overflow-y-auto flex-1 font-mono text-xs py-1">
+            <div class="text-center text-[var(--muted-foreground,#94a3b8)] py-8 text-xs italic">No resting orders</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Client-side Pure Matching Engine Implementation in JavaScript -->
+  <script>
+    class WebOrderBook {
+      constructor() {
+        this.bids = new Map(); // price -> { price, orders: [], totalQty: 0 }
+        this.asks = new Map(); // price -> { price, orders: [], totalQty: 0 }
+        this.orders = new Map(); // id -> order
+        this.trades = [];
+        this.seq = 0;
+        this.tradeId = 0;
+        this.lastPrice = 100;
+        this.totalVolume = 0;
+      }
+
+      getBestBid() {
+        if (this.bids.size === 0) return null;
+        return Math.max(...this.bids.keys());
+      }
+
+      getBestAsk() {
+        if (this.asks.size === 0) return null;
+        return Math.min(...this.asks.keys());
+      }
+
+      processOrder(id, side, type, qty, price) {
+        if (this.orders.has(id)) return { status: 'REJECT', reason: 'DUPLICATE_ORDER_ID' };
+        if (qty <= 0) return { status: 'REJECT', reason: 'INVALID_QUANTITY' };
+        if (type === 'LIMIT' && (price === undefined || price <= 0)) return { status: 'REJECT', reason: 'INVALID_PRICE' };
+
+        this.seq++;
+        const order = {
+          id, side, type, price: type === 'LIMIT' ? price : null,
+          originalQty: qty, remainingQty: qty, filledQty: 0, seq: this.seq
+        };
+        this.orders.set(id, order);
+
+        const newTrades = [];
+
+        // Matching logic
+        if (side === 'BUY') {
+          while (order.remainingQty > 0 && this.asks.size > 0) {
+            const bestAsk = this.getBestAsk();
+            if (type === 'LIMIT' && bestAsk > order.price) break;
+
+            const level = this.asks.get(bestAsk);
+            while (order.remainingQty > 0 && level.orders.length > 0) {
+              const maker = level.orders[0];
+              const fill = Math.min(order.remainingQty, maker.remainingQty);
+              const tradePrice = level.price;
+
+              maker.remainingQty -= fill;
+              maker.filledQty += fill;
+              order.remainingQty -= fill;
+              order.filledQty += fill;
+              level.totalQty -= fill;
+
+              this.tradeId++;
+              this.totalVolume += fill;
+              this.lastPrice = tradePrice;
+              const trade = {
+                id: this.tradeId,
+                makerId: maker.id,
+                takerId: order.id,
+                side: 'SELL',
+                price: tradePrice,
+                qty: fill
+              };
+              this.trades.unshift(trade);
+              newTrades.push(trade);
+
+              if (maker.remainingQty === 0) {
+                level.orders.shift();
+              }
+            }
+            if (level.totalQty === 0 || level.orders.length === 0) {
+              this.asks.delete(bestAsk);
+            }
+          }
+
+          if (order.remainingQty > 0 && type === 'LIMIT') {
+            if (!this.bids.has(order.price)) {
+              this.bids.set(order.price, { price: order.price, orders: [], totalQty: 0 });
+            }
+            const lvl = this.bids.get(order.price);
+            lvl.orders.push(order);
+            lvl.totalQty += order.remainingQty;
+          }
+        } else { // SELL
+          while (order.remainingQty > 0 && this.bids.size > 0) {
+            const bestBid = this.getBestBid();
+            if (type === 'LIMIT' && bestBid < order.price) break;
+
+            const level = this.bids.get(bestBid);
+            while (order.remainingQty > 0 && level.orders.length > 0) {
+              const maker = level.orders[0];
+              const fill = Math.min(order.remainingQty, maker.remainingQty);
+              const tradePrice = level.price;
+
+              maker.remainingQty -= fill;
+              maker.filledQty += fill;
+              order.remainingQty -= fill;
+              order.filledQty += fill;
+              level.totalQty -= fill;
+
+              this.tradeId++;
+              this.totalVolume += fill;
+              this.lastPrice = tradePrice;
+              const trade = {
+                id: this.tradeId,
+                makerId: maker.id,
+                takerId: order.id,
+                side: 'BUY',
+                price: tradePrice,
+                qty: fill
+              };
+              this.trades.unshift(trade);
+              newTrades.push(trade);
+
+              if (maker.remainingQty === 0) {
+                level.orders.shift();
+              }
+            }
+            if (level.totalQty === 0 || level.orders.length === 0) {
+              this.bids.delete(bestBid);
+            }
+          }
+
+          if (order.remainingQty > 0 && type === 'LIMIT') {
+            if (!this.asks.has(order.price)) {
+              this.asks.set(order.price, { price: order.price, orders: [], totalQty: 0 });
+            }
+            const lvl = this.asks.get(order.price);
+            lvl.orders.push(order);
+            lvl.totalQty += order.remainingQty;
+          }
+        }
+
+        return { status: 'OK', trades: newTrades };
+      }
+
+      cancelOrder(id) {
+        const order = this.orders.get(id);
+        if (!order || order.remainingQty === 0) return false;
+
+        const book = order.side === 'BUY' ? this.bids : this.asks;
+        const level = book.get(order.price);
+        if (level) {
+          level.totalQty -= order.remainingQty;
+          level.orders = level.orders.filter(o => o.id !== id);
+          if (level.totalQty === 0 || level.orders.length === 0) {
+            book.delete(order.price);
+          }
+        }
+        order.remainingQty = 0;
+        return true;
+      }
+    }
+
+    // UI state & wiring
+    const book = new WebOrderBook();
+    let currentSide = 'BUY';
+    let currentType = 'LIMIT';
+    let simInterval = null;
+    let simStep = 0;
+
+    // Elements
+    const tabBuy = document.getElementById('tab-buy');
+    const tabSell = document.getElementById('tab-sell');
+    const typeLimit = document.getElementById('type-limit');
+    const typeMarket = document.getElementById('type-market');
+    const priceGroup = document.getElementById('price-group');
+    const inputPrice = document.getElementById('input-price');
+    const inputQty = document.getElementById('input-qty');
+    const btnSubmit = document.getElementById('btn-submit-order');
+    const asksContainer = document.getElementById('asks-container');
+    const bidsContainer = document.getElementById('bids-container');
+    const tradesContainer = document.getElementById('trades-container');
+    const activeOrdersContainer = document.getElementById('active-orders-container');
+    const activeOrdersCount = document.getElementById('active-orders-count');
+    const btnToggleSim = document.getElementById('btn-toggle-sim');
+    const btnStepSim = document.getElementById('btn-step-sim');
+    const btnResetBook = document.getElementById('btn-reset-book');
+
+    tabBuy.addEventListener('click', () => setSide('BUY'));
+    tabSell.addEventListener('click', () => setSide('SELL'));
+    typeLimit.addEventListener('click', () => setType('LIMIT'));
+    typeMarket.addEventListener('click', () => setType('MARKET'));
+    btnSubmit.addEventListener('click', handleSubmit);
+    btnToggleSim.addEventListener('click', toggleSimulation);
+    btnStepSim.addEventListener('click', stepSimulation);
+    btnResetBook.addEventListener('click', resetOrderBook);
+
+    function setSide(side) {
+      currentSide = side;
+      if (side === 'BUY') {
+        tabBuy.className = 'py-1.5 rounded-md font-bold text-xs bg-emerald-600 text-white shadow transition';
+        tabSell.className = 'py-1.5 rounded-md font-bold text-xs text-[var(--muted-foreground,#94a3b8)] hover:text-white transition';
+        btnSubmit.className = 'w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow transition';
+        btnSubmit.textContent = `SUBMIT BUY ${currentType} ORDER`;
+      } else {
+        tabSell.className = 'py-1.5 rounded-md font-bold text-xs bg-red-600 text-white shadow transition';
+        tabBuy.className = 'py-1.5 rounded-md font-bold text-xs text-[var(--muted-foreground,#94a3b8)] hover:text-white transition';
+        btnSubmit.className = 'w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-sm shadow transition';
+        btnSubmit.textContent = `SUBMIT SELL ${currentType} ORDER`;
+      }
+    }
+
+    function setType(type) {
+      currentType = type;
+      if (type === 'LIMIT') {
+        typeLimit.className = 'py-1.5 px-3 rounded-lg border border-indigo-500 bg-indigo-500/20 text-indigo-300 text-xs font-semibold';
+        typeMarket.className = 'py-1.5 px-3 rounded-lg border border-[var(--border,#334155)] text-[var(--muted-foreground,#94a3b8)] hover:text-white text-xs font-semibold';
+        priceGroup.style.display = 'block';
+      } else {
+        typeMarket.className = 'py-1.5 px-3 rounded-lg border border-indigo-500 bg-indigo-500/20 text-indigo-300 text-xs font-semibold';
+        typeLimit.className = 'py-1.5 px-3 rounded-lg border border-[var(--border,#334155)] text-[var(--muted-foreground,#94a3b8)] hover:text-white text-xs font-semibold';
+        priceGroup.style.display = 'none';
+      }
+      setSide(currentSide);
+    }
+
+    window.adjustPrice = function(delta) {
+      inputPrice.value = Math.max(1, parseInt(inputPrice.value || 100) + delta);
+    };
+
+    function handleSubmit() {
+      const qty = parseInt(inputQty.value);
+      const price = currentType === 'LIMIT' ? parseInt(inputPrice.value) : null;
+      if (!qty || qty <= 0) return alert('Invalid Quantity');
+      if (currentType === 'LIMIT' && (!price || price <= 0)) return alert('Invalid Price');
+
+      const oid = 'user_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
+      book.processOrder(oid, currentSide, currentType, qty, price);
+      renderUI();
+    }
+
+    window.cancelOrder = function(id) {
+      book.cancelOrder(id);
+      renderUI();
+    };
+
+    function renderUI() {
+      const bb = book.getBestBid();
+      const ba = book.getBestAsk();
+      const spread = (bb !== null && ba !== null) ? (ba - bb) : '--';
+
+      document.getElementById('metric-last-price').textContent = book.lastPrice;
+      document.getElementById('metric-spread').textContent = spread;
+      document.getElementById('metric-volume').textContent = book.totalVolume.toLocaleString();
+      document.getElementById('metric-trades').textContent = book.trades.length.toLocaleString();
+      document.getElementById('ladder-spread').textContent = `Spread: ${spread} ticks`;
+
+      // Render Asks (sorted ascending, displayed descending top-to-bottom)
+      const sortedAsks = Array.from(book.asks.values()).sort((a, b) => b.price - a.price);
+      const maxAskQty = Math.max(1, ...sortedAsks.map(l => l.totalQty));
+      asksContainer.innerHTML = sortedAsks.map(level => {
+        const pct = Math.min(100, Math.round((level.totalQty / maxAskQty) * 100));
+        return `
+          <div class="relative grid grid-cols-3 text-xs font-mono px-2 py-1 rounded hover:bg-red-500/10 cursor-pointer">
+            <div class="absolute inset-y-0 right-0 depth-bar-ask rounded-r" style="width: ${pct}%"></div>
+            <div class="relative text-[var(--muted-foreground,#94a3b8)] text-left">${level.orders.length} order${level.orders.length > 1 ? 's' : ''}</div>
+            <div class="relative text-red-400 font-bold text-right">${level.price}</div>
+            <div class="relative text-right font-medium">${level.totalQty}</div>
+          </div>
+        `;
+      }).join('') || '<div class="text-center text-xs text-[var(--muted-foreground,#94a3b8)] py-4">No resting asks</div>';
+
+      // Render Bids (sorted descending)
+      const sortedBids = Array.from(book.bids.values()).sort((a, b) => b.price - a.price);
+      const maxBidQty = Math.max(1, ...sortedBids.map(l => l.totalQty));
+      bidsContainer.innerHTML = sortedBids.map(level => {
+        const pct = Math.min(100, Math.round((level.totalQty / maxBidQty) * 100));
+        return `
+          <div class="relative grid grid-cols-3 text-xs font-mono px-2 py-1 rounded hover:bg-emerald-500/10 cursor-pointer">
+            <div class="absolute inset-y-0 right-0 depth-bar-bid rounded-r" style="width: ${pct}%"></div>
+            <div class="relative text-[var(--muted-foreground,#94a3b8)] text-left">${level.orders.length} order${level.orders.length > 1 ? 's' : ''}</div>
+            <div class="relative text-emerald-400 font-bold text-right">${level.price}</div>
+            <div class="relative text-right font-medium">${level.totalQty}</div>
+          </div>
+        `;
+      }).join('') || '<div class="text-center text-xs text-[var(--muted-foreground,#94a3b8)] py-4">No resting bids</div>';
+
+      // Render Recent Trades (top 15)
+      tradesContainer.innerHTML = book.trades.slice(0, 15).map(t => `
+        <div class="grid grid-cols-4 px-2 py-1 rounded hover:bg-[var(--sidebar,#334155)] border-b border-[var(--border,#334155)]/40 text-[11px]">
+          <div class="text-[var(--muted-foreground,#94a3b8)]">#${t.id}</div>
+          <div class="text-right font-bold ${t.side === 'BUY' ? 'text-emerald-400' : 'text-red-400'}">${t.price}</div>
+          <div class="text-right font-medium">${t.qty}</div>
+          <div class="text-right text-[10px] text-[var(--muted-foreground,#94a3b8)]">${t.side}</div>
+        </div>
+      `).join('') || '<div class="text-center text-xs text-[var(--muted-foreground,#94a3b8)] py-8">Awaiting executions...</div>';
+
+      // Render Active Orders
+      const activeList = Array.from(book.orders.values()).filter(o => o.remainingQty > 0);
+      activeOrdersCount.textContent = `${activeList.length} active`;
+      activeOrdersContainer.innerHTML = activeList.map(o => `
+        <div class="grid grid-cols-4 items-center px-2 py-1 rounded hover:bg-[var(--sidebar,#334155)] border-b border-[var(--border,#334155)]/40 text-[11px]">
+          <div class="truncate text-[var(--muted-foreground,#94a3b8)]">${o.id}</div>
+          <div class="font-bold ${o.side === 'BUY' ? 'text-emerald-400' : 'text-red-400'}">${o.side}</div>
+          <div class="font-mono">${o.remainingQty}@${o.price}</div>
+          <div class="text-right">
+            <button onclick="cancelOrder('${o.id}')" class="px-1.5 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[10px]">Cancel</button>
+          </div>
+        </div>
+      `).join('') || '<div class="text-center text-xs text-[var(--muted-foreground,#94a3b8)] py-8">No resting orders</div>';
+    }
+
+    // Quick injection helpers
+    window.injectSpreadQuotes = function() {
+      const mid = book.lastPrice || 100;
+      for (let i = 1; i <= 4; i++) {
+        book.processOrder(`seed_b_${Date.now()}_${i}`, 'BUY', 'LIMIT', Math.floor(Math.random() * 20 + 5), mid - i);
+        book.processOrder(`seed_a_${Date.now()}_${i}`, 'SELL', 'LIMIT', Math.floor(Math.random() * 20 + 5), mid + i);
+      }
+      renderUI();
+    };
+
+    window.injectMarketSweep = function() {
+      const side = Math.random() < 0.5 ? 'BUY' : 'SELL';
+      const qty = Math.floor(Math.random() * 40 + 20);
+      book.processOrder(`sweep_${Date.now()}`, side, 'MARKET', qty);
+      renderUI();
+    };
+
+    function stepSimulation() {
+      simStep++;
+      const mid = book.lastPrice || 100;
+      const p = Math.random();
+      if (p < 0.65) {
+        // Passive limit order
+        const side = Math.random() < 0.5 ? 'BUY' : 'SELL';
+        const offset = Math.floor((Math.random() - 0.5) * 8);
+        const price = Math.max(1, mid + offset);
+        const qty = Math.floor(Math.random() * 25 + 5);
+        book.processOrder(`sim_${simStep}`, side, 'LIMIT', qty, price);
+      } else if (p < 0.85) {
+        // Market order
+        const side = Math.random() < 0.5 ? 'BUY' : 'SELL';
+        const qty = Math.floor(Math.random() * 20 + 5);
+        book.processOrder(`sim_${simStep}`, side, 'MARKET', qty);
+      } else {
+        // Random cancel
+        const active = Array.from(book.orders.values()).filter(o => o.remainingQty > 0);
+        if (active.length > 0) {
+          const target = active[Math.floor(Math.random() * active.length)];
+          book.cancelOrder(target.id);
+        }
+      }
+      renderUI();
+    }
+
+    function toggleSimulation() {
+      if (simInterval) {
+        clearInterval(simInterval);
+        simInterval = null;
+        document.getElementById('sim-icon').textContent = '▶';
+        document.getElementById('sim-text').textContent = 'Start Simulation';
+        btnToggleSim.className = 'px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1.5 transition shadow';
+      } else {
+        simInterval = setInterval(stepSimulation, 350);
+        document.getElementById('sim-icon').textContent = '⏸';
+        document.getElementById('sim-text').textContent = 'Pause Simulation';
+        btnToggleSim.className = 'px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs flex items-center gap-1.5 transition shadow';
+      }
+    }
+
+    function resetOrderBook() {
+      if (simInterval) toggleSimulation();
+      book.bids.clear();
+      book.asks.clear();
+      book.orders.clear();
+      book.trades = [];
+      book.totalVolume = 0;
+      book.lastPrice = 100;
+      injectSpreadQuotes();
+    }
+
+    // Initial setup with healthy spread
+    injectSpreadQuotes();
+  </script>
+</body>
+</html>
