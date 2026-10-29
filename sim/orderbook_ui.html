@@ -2,250 +2,399 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Limit Order Book Trading Terminal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MetaTrader 5 Web Terminal - LOB Engine</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <style>
-    /* Custom scrollbars */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.3); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(150, 150, 150, 0.5); }
-    .depth-bar-bid { background: rgba(34, 197, 94, 0.15); }
-    .depth-bar-ask { background: rgba(239, 68, 68, 0.15); }
+    /* MetaTrader classic dark typography and layout */
+    * { box-sizing: border-box; }
+    body {
+      background-color: #12161c;
+      color: #d1d5db;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #12161c; }
+    ::-webkit-scrollbar-thumb { background: #2a3240; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3b4759; }
+
+    .mt-border { border-color: #232b38; }
+    .mt-bg-dark { background-color: #12161c; }
+    .mt-bg-panel { background-color: #181f2a; }
+    .mt-bg-card { background-color: #1d2635; }
+    .mt-bg-hover:hover { background-color: #243042; }
+
+    .btn-buy { background: linear-gradient(180deg, #16a34a 0%, #15803d 100%); }
+    .btn-buy:hover { background: #15803d; }
+    .btn-sell { background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%); }
+    .btn-sell:hover { background: #b91c1c; }
+
+    .tab-active {
+      background-color: #181f2a;
+      color: #60a5fa;
+      border-bottom: 2px solid #3b82f6;
+    }
+    .dom-bid-bar { background: rgba(34, 197, 94, 0.18); }
+    .dom-ask-bar { background: rgba(239, 68, 68, 0.18); }
   </style>
 </head>
-<body class="bg-[var(--background,#0f172a)] text-[var(--foreground,#f8fafc)] antialiased p-4 select-none min-h-screen">
-  <div class="max-w-7xl mx-auto space-y-4">
+<body class="select-none text-xs">
 
-    <!-- Top Header -->
-    <header class="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] shadow-sm">
-      <div class="flex items-center space-x-3">
-        <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-md">
-          ⚡
-        </div>
-        <div>
-          <h1 class="text-lg font-bold tracking-tight text-[var(--foreground,#f8fafc)] flex items-center gap-2">
-            Limit Order Book <span class="text-xs px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-mono border border-indigo-500/30">LOB-CORE v1.0</span>
-          </h1>
-          <p class="text-xs text-[var(--muted-foreground,#94a3b8)]">Deterministic Price-Time Priority Matching Engine</p>
-        </div>
+  <!-- 1. MT5 Top Navigation Bar -->
+  <header class="h-9 bg-[#181f2a] border-b mt-border flex items-center justify-between px-3 text-xs">
+    <div class="flex items-center space-x-4">
+      <div class="flex items-center space-x-1.5 font-bold text-white tracking-wide">
+        <span class="w-5 h-5 rounded bg-blue-600 flex items-center justify-center text-[11px] font-black shadow">MT</span>
+        <span class="text-sm font-semibold">MetaTrader <span class="text-blue-400">5</span> Web</span>
+      </div>
+      <div class="h-4 w-px bg-gray-700"></div>
+      <div class="flex items-center space-x-3 text-gray-400 text-[11px]">
+        <span>Account: <b class="text-gray-200">#880291 (Demo)</b></span>
+        <span>Leverage: <b class="text-gray-200">1:100</b></span>
+        <span>Server: <b class="text-emerald-400">LOB-PROD-01</b></span>
+      </div>
+    </div>
+
+    <!-- Quick Action / Bot Automation Toggle -->
+    <div class="flex items-center space-x-2">
+      <div class="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-[#12161c] border mt-border text-[11px]">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="text-gray-300">Ping: <span class="text-emerald-400 font-mono">1.2 ms</span></span>
+      </div>
+      <button id="btn-toggle-algo" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium flex items-center gap-1 shadow">
+        <span id="algo-icon">▶</span> <span id="algo-text">Auto Trading (Algo)</span>
+      </button>
+      <button onclick="openOrderModal()" class="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium shadow">
+        + New Order (F9)
+      </button>
+    </div>
+  </header>
+
+  <!-- 2. MT5 Secondary Ribbon / Chart Controls -->
+  <div class="h-8 bg-[#151b24] border-b mt-border flex items-center justify-between px-3">
+    <!-- Timeframe switchers -->
+    <div class="flex items-center space-x-1">
+      <span class="text-[11px] font-bold text-gray-400 mr-2 flex items-center gap-1">
+        <span class="text-blue-400">⚡</span> <span id="active-symbol-badge">BTCUSD</span>
+      </span>
+      <div class="flex bg-[#12161c] rounded p-0.5 border mt-border">
+        <button onclick="setTimeframe('1s')" class="tf-btn px-2 py-0.5 rounded text-[11px] font-medium text-blue-400 bg-[#181f2a]">1s</button>
+        <button onclick="setTimeframe('5s')" class="tf-btn px-2 py-0.5 rounded text-[11px] font-medium text-gray-400 hover:text-white">5s</button>
+        <button onclick="setTimeframe('15s')" class="tf-btn px-2 py-0.5 rounded text-[11px] font-medium text-gray-400 hover:text-white">15s</button>
+        <button onclick="setTimeframe('1m')" class="tf-btn px-2 py-0.5 rounded text-[11px] font-medium text-gray-400 hover:text-white">1m</button>
       </div>
 
-      <!-- Quick Metrics Bar -->
-      <div class="flex items-center gap-6 text-xs font-mono">
-        <div class="text-center">
-          <span class="text-[var(--muted-foreground,#94a3b8)] uppercase block text-[11px]">Last Price</span>
-          <span id="metric-last-price" class="font-bold text-base text-yellow-400">100</span>
-        </div>
-        <div class="text-center">
-          <span class="text-[var(--muted-foreground,#94a3b8)] uppercase block text-[11px]">Spread</span>
-          <span id="metric-spread" class="font-bold text-base text-indigo-400">0</span>
-        </div>
-        <div class="text-center">
-          <span class="text-[var(--muted-foreground,#94a3b8)] uppercase block text-[11px]">Total Volume</span>
-          <span id="metric-volume" class="font-bold text-base text-emerald-400">0</span>
-        </div>
-        <div class="text-center">
-          <span class="text-[var(--muted-foreground,#94a3b8)] uppercase block text-[11px]">Total Trades</span>
-          <span id="metric-trades" class="font-bold text-base text-sky-400">0</span>
-        </div>
+      <div class="h-4 w-px bg-gray-700 mx-2"></div>
+
+      <!-- Chart Types -->
+      <div class="flex space-x-1 text-gray-400">
+        <button onclick="setChartType('candle')" id="ct-candle" class="px-2 py-0.5 rounded bg-[#181f2a] text-blue-400 border mt-border">🕯️ Candles</button>
+        <button onclick="setChartType('line')" id="ct-line" class="px-2 py-0.5 rounded hover:text-white border border-transparent">📈 Line</button>
       </div>
 
-      <!-- Simulator Auto-Play Controls -->
-      <div class="flex items-center gap-2">
-        <button id="btn-toggle-sim" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1.5 transition shadow">
-          <span id="sim-icon">▶</span> <span id="sim-text">Start Simulation</span>
-        </button>
-        <button id="btn-step-sim" class="px-3 py-1.5 rounded-lg border border-[var(--border,#334155)] hover:bg-[var(--sidebar,#334155)] text-xs text-[var(--foreground,#f8fafc)] transition">
-          Step
-        </button>
-        <button id="btn-reset-book" class="px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/20 text-xs text-red-400 transition">
-          Reset
-        </button>
-      </div>
-    </header>
+      <div class="h-4 w-px bg-gray-700 mx-2"></div>
 
-    <!-- Main Grid: Left = Order Entry & Controls, Center = Order Book Ladder, Right = Trade Tape & Active Orders -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <!-- Indicators -->
+      <button onclick="toggleIndicator('ma')" id="btn-ma" class="px-2 py-0.5 rounded bg-blue-900/30 text-blue-300 border border-blue-500/40 text-[11px]">
+        MA (20)
+      </button>
+    </div>
 
-      <!-- Col 1: Order Placement (3 cols) -->
-      <div class="lg:col-span-3 space-y-4">
-        <!-- Order Entry Card -->
-        <div class="p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] space-y-4 shadow-sm">
-          <div class="flex items-center justify-between border-b border-[var(--border,#334155)] pb-2.5">
-            <h2 class="text-sm font-semibold text-[var(--foreground,#f8fafc)]">Order Placement</h2>
-            <span class="text-xs text-[var(--muted-foreground,#94a3b8)]">Rule 1-9 Compliant</span>
-          </div>
-
-          <!-- Buy / Sell Toggle -->
-          <div class="grid grid-cols-2 gap-2 p-1 rounded-lg bg-[var(--background,#0f172a)] border border-[var(--border,#334155)]">
-            <button id="tab-buy" class="py-1.5 rounded-md font-bold text-xs bg-emerald-600 text-white shadow transition">
-              BUY (Bid)
-            </button>
-            <button id="tab-sell" class="py-1.5 rounded-md font-bold text-xs text-[var(--muted-foreground,#94a3b8)] hover:text-white transition">
-              SELL (Ask)
-            </button>
-          </div>
-
-          <!-- Order Type Select -->
-          <div>
-            <label class="block text-xs font-medium text-[var(--muted-foreground,#94a3b8)] mb-1">Order Type</label>
-            <div class="grid grid-cols-2 gap-2">
-              <button id="type-limit" class="py-1.5 px-3 rounded-lg border border-indigo-500 bg-indigo-500/20 text-indigo-300 text-xs font-semibold">
-                LIMIT
-              </button>
-              <button id="type-market" class="py-1.5 px-3 rounded-lg border border-[var(--border,#334155)] text-[var(--muted-foreground,#94a3b8)] hover:text-white text-xs font-semibold">
-                MARKET
-              </button>
-            </div>
-          </div>
-
-          <!-- Price Input (Hidden for Market) -->
-          <div id="price-group">
-            <label class="block text-xs font-medium text-[var(--muted-foreground,#94a3b8)] mb-1">Price (Ticks)</label>
-            <div class="relative">
-              <input id="input-price" type="number" min="1" step="1" value="100" class="w-full px-3 py-2 rounded-lg bg-[var(--background,#0f172a)] border border-[var(--border,#334155)] text-sm font-mono text-[var(--foreground,#f8fafc)] focus:outline-none focus:border-indigo-500">
-              <div class="absolute right-2 top-2 flex space-x-1">
-                <button onclick="adjustPrice(-1)" class="px-1.5 py-0.5 rounded bg-[var(--card,#1e293b)] text-xs border border-[var(--border,#334155)] hover:bg-slate-700">-1</button>
-                <button onclick="adjustPrice(+1)" class="px-1.5 py-0.5 rounded bg-[var(--card,#1e293b)] text-xs border border-[var(--border,#334155)] hover:bg-slate-700">+1</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Quantity Input -->
-          <div>
-            <label class="block text-xs font-medium text-[var(--muted-foreground,#94a3b8)] mb-1">Quantity (Lots)</label>
-            <input id="input-qty" type="number" min="1" step="1" value="10" class="w-full px-3 py-2 rounded-lg bg-[var(--background,#0f172a)] border border-[var(--border,#334155)] text-sm font-mono text-[var(--foreground,#f8fafc)] focus:outline-none focus:border-indigo-500">
-          </div>
-
-          <!-- Submit Button -->
-          <button id="btn-submit-order" class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow transition">
-            SUBMIT BUY ORDER
-          </button>
-
-          <!-- Quick Action Buttons -->
-          <div class="pt-2 border-t border-[var(--border,#334155)] space-y-2">
-            <span class="text-xs text-[var(--muted-foreground,#94a3b8)] block font-medium">Quick Liquidity Injections</span>
-            <div class="grid grid-cols-2 gap-2 text-xs">
-              <button onclick="injectSpreadQuotes()" class="p-1.5 rounded border border-[var(--border,#334155)] hover:bg-[var(--sidebar,#334155)] text-left">
-                + MM Quotes
-              </button>
-              <button onclick="injectMarketSweep()" class="p-1.5 rounded border border-[var(--border,#334155)] hover:bg-[var(--sidebar,#334155)] text-left">
-                ⚡ Sweep Book
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- System Architecture Note -->
-        <div class="p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] space-y-2 text-xs text-[var(--muted-foreground,#94a3b8)]">
-          <div class="font-semibold text-[var(--foreground,#f8fafc)] flex items-center gap-1.5">
-            <span>🛡️</span> Guaranteed Invariants
-          </div>
-          <ul class="list-disc list-inside space-y-1 text-[11px]">
-            <li>Price-Time Priority (FIFO queues)</li>
-            <li>Trades execute at resting (maker) price</li>
-            <li>Book uncrossed: Best Bid &lt; Best Ask</li>
-            <li>Strict integer mathematics (zero floats)</li>
-          </ul>
-        </div>
-      </div>
-
-      <!-- Col 2: Order Book Depth Ladder (5 cols) -->
-      <div class="lg:col-span-5 p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] flex flex-col shadow-sm">
-        <div class="flex items-center justify-between border-b border-[var(--border,#334155)] pb-2 mb-3">
-          <h2 class="text-sm font-semibold text-[var(--foreground,#f8fafc)] flex items-center gap-2">
-            Order Book Ladder (Level 2 Depth)
-          </h2>
-          <span class="text-xs font-mono text-[var(--muted-foreground,#94a3b8)]">Ticks / Lots</span>
-        </div>
-
-        <!-- Table Headers -->
-        <div class="grid grid-cols-3 text-xs font-medium text-[var(--muted-foreground,#94a3b8)] px-2 py-1 border-b border-[var(--border,#334155)]">
-          <div>Orders / Depth</div>
-          <div class="text-right">Price (Ticks)</div>
-          <div class="text-right">Level Qty</div>
-        </div>
-
-        <!-- Asks Container (Top, scroll to bottom) -->
-        <div id="asks-container" class="space-y-0.5 overflow-y-auto max-h-56 min-h-[140px] flex flex-col justify-end py-1">
-          <!-- Dynamically populated -->
-        </div>
-
-        <!-- Spread Divider -->
-        <div class="my-2 py-2 px-3 rounded-lg bg-[var(--background,#0f172a)] border border-[var(--border,#334155)] flex items-center justify-between text-xs font-mono">
-          <span class="text-[var(--muted-foreground,#94a3b8)] flex items-center gap-1.5">
-            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Market Spread
-          </span>
-          <span id="ladder-spread" class="font-bold text-indigo-400">Spread: --</span>
-        </div>
-
-        <!-- Bids Container (Bottom, scroll from top) -->
-        <div id="bids-container" class="space-y-0.5 overflow-y-auto max-h-56 min-h-[140px] py-1">
-          <!-- Dynamically populated -->
-        </div>
-      </div>
-
-      <!-- Col 3: Trade Tape & Active Orders (4 cols) -->
-      <div class="lg:col-span-4 space-y-4">
-        <!-- Live Execution Tape -->
-        <div class="p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] flex flex-col shadow-sm h-72">
-          <div class="flex items-center justify-between border-b border-[var(--border,#334155)] pb-2 mb-2">
-            <h2 class="text-sm font-semibold text-[var(--foreground,#f8fafc)] flex items-center gap-2">
-              <span>📜</span> Execution Tape
-            </h2>
-            <span class="text-xs text-[var(--muted-foreground,#94a3b8)]">Live Fills</span>
-          </div>
-
-          <div class="grid grid-cols-4 text-[11px] font-medium text-[var(--muted-foreground,#94a3b8)] px-2 py-1 border-b border-[var(--border,#334155)]">
-            <div>Trade #</div>
-            <div class="text-right">Price</div>
-            <div class="text-right">Qty</div>
-            <div class="text-right">Maker Side</div>
-          </div>
-
-          <div id="trades-container" class="space-y-1 overflow-y-auto flex-1 font-mono text-xs py-1">
-            <div class="text-center text-[var(--muted-foreground,#94a3b8)] py-8 text-xs italic">Awaiting executions...</div>
-          </div>
-        </div>
-
-        <!-- Active Orders & Cancellation Panel -->
-        <div class="p-4 rounded-xl border border-[var(--border,#334155)] bg-[var(--card,#1e293b)] flex flex-col shadow-sm h-72">
-          <div class="flex items-center justify-between border-b border-[var(--border,#334155)] pb-2 mb-2">
-            <h2 class="text-sm font-semibold text-[var(--foreground,#f8fafc)] flex items-center gap-2">
-              <span>📑</span> Resting Orders
-            </h2>
-            <span id="active-orders-count" class="text-xs text-[var(--muted-foreground,#94a3b8)]">0 active</span>
-          </div>
-
-          <div class="grid grid-cols-4 text-[11px] font-medium text-[var(--muted-foreground,#94a3b8)] px-2 py-1 border-b border-[var(--border,#334155)]">
-            <div>ID</div>
-            <div>Side</div>
-            <div>Price</div>
-            <div class="text-right">Action</div>
-          </div>
-
-          <div id="active-orders-container" class="space-y-1 overflow-y-auto flex-1 font-mono text-xs py-1">
-            <div class="text-center text-[var(--muted-foreground,#94a3b8)] py-8 text-xs italic">No resting orders</div>
-          </div>
-        </div>
-      </div>
-
+    <!-- Right toolbar metrics -->
+    <div class="flex items-center space-x-4 text-[11px] font-mono">
+      <span>Spread: <b id="bar-spread" class="text-yellow-400">0.00</b></span>
+      <span>24h High: <b id="bar-high" class="text-emerald-400">--</b></span>
+      <span>24h Low: <b id="bar-low" class="text-red-400">--</b></span>
     </div>
   </div>
 
-  <!-- Client-side Pure Matching Engine Implementation in JavaScript -->
+  <!-- 3. Main Central Workspace (Market Watch, Chart Area, DOM Ladder) -->
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- Left: Market Watch / Symbols (220px) -->
+    <div class="w-64 border-r mt-border bg-[#151b24] flex flex-col flex-shrink-0">
+      <div class="h-7 bg-[#181f2a] px-2.5 flex items-center justify-between border-b mt-border font-semibold text-gray-300">
+        <span>Market Watch</span>
+        <span class="text-[10px] text-gray-400 font-normal">Symbols (6)</span>
+      </div>
+
+      <div class="flex-1 overflow-y-auto">
+        <table class="w-full text-[11px] text-left">
+          <thead class="bg-[#181f2a] text-gray-400 sticky top-0 border-b mt-border font-medium">
+            <tr>
+              <th class="py-1 px-2">Symbol</th>
+              <th class="py-1 px-1 text-right">Bid</th>
+              <th class="py-1 px-2 text-right">Ask</th>
+            </tr>
+          </thead>
+          <tbody id="market-watch-body" class="divide-y divide-gray-800/60 font-mono">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Quick Ticker Details -->
+      <div class="p-2 border-t mt-border bg-[#181f2a] text-[11px] space-y-1">
+        <div class="flex justify-between text-gray-400">
+          <span>Engine Seq #:</span> <span id="info-seq" class="text-gray-200 font-mono">0</span>
+        </div>
+        <div class="flex justify-between text-gray-400">
+          <span>Executed Trades:</span> <span id="info-trades" class="text-gray-200 font-mono">0</span>
+        </div>
+        <div class="flex justify-between text-gray-400">
+          <span>24h Volume:</span> <span id="info-volume" class="text-emerald-400 font-mono">0 lots</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: Interactive Candlestick Chart with One-Click Trading Panel -->
+    <div class="flex-1 flex flex-col bg-[#12161c] relative overflow-hidden">
+
+      <!-- One-Click Trading Floating Panel (Top-Left of chart) -->
+      <div class="absolute top-3 left-3 z-20 flex items-center rounded-lg bg-[#181f2a]/95 border mt-border p-1.5 shadow-2xl backdrop-blur">
+        <!-- Sell Box -->
+        <button onclick="quickTrade('SELL')" class="btn-sell text-white px-3 py-1.5 rounded-l text-left min-w-[78px] transition active:scale-95 shadow">
+          <span class="block text-[10px] uppercase font-bold text-red-200">SELL</span>
+          <span id="oct-bid-price" class="font-mono text-xs font-black block">100.00</span>
+        </button>
+
+        <!-- Volume Stepper -->
+        <div class="px-2 bg-[#12161c] border-y mt-border flex flex-col items-center justify-center py-1">
+          <input id="oct-lot" type="number" step="0.1" min="0.01" value="1.00" class="w-14 bg-transparent text-center font-mono text-xs text-white font-bold focus:outline-none">
+          <span class="text-[9px] text-gray-400 uppercase font-semibold">Lots</span>
+        </div>
+
+        <!-- Buy Box -->
+        <button onclick="quickTrade('BUY')" class="btn-buy text-white px-3 py-1.5 rounded-r text-right min-w-[78px] transition active:scale-95 shadow">
+          <span class="block text-[10px] uppercase font-bold text-green-200">BUY</span>
+          <span id="oct-ask-price" class="font-mono text-xs font-black block">100.05</span>
+        </button>
+      </div>
+
+      <!-- Main HTML5 Canvas Chart -->
+      <div class="flex-1 relative w-full h-full" id="chart-wrapper">
+        <canvas id="chart-canvas" class="w-full h-full block"></canvas>
+      </div>
+    </div>
+
+    <!-- Right: Depth of Market (DOM) / Order Book Ladder (250px) -->
+    <div class="w-64 border-l mt-border bg-[#151b24] flex flex-col flex-shrink-0">
+      <div class="h-7 bg-[#181f2a] px-2.5 flex items-center justify-between border-b mt-border font-semibold text-gray-300">
+        <span>Depth of Market (DOM)</span>
+        <span class="text-[10px] text-blue-400 font-mono">L2 Depth</span>
+      </div>
+
+      <!-- DOM Column Headers -->
+      <div class="grid grid-cols-3 bg-[#181f2a] text-gray-400 px-2 py-1 border-b mt-border font-medium text-[10px]">
+        <div>Bid Qty</div>
+        <div class="text-center">Price</div>
+        <div class="text-right">Ask Qty</div>
+      </div>
+
+      <!-- Asks Ladder (Red) -->
+      <div id="dom-asks" class="flex-1 overflow-y-auto flex flex-col justify-end divide-y divide-gray-800/40 text-[11px] font-mono">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Spread Middle Ribbon -->
+      <div class="py-1 px-3 bg-[#12161c] border-y mt-border flex items-center justify-between text-xs font-mono font-bold">
+        <span class="text-gray-400 text-[11px]">Spread:</span>
+        <span id="dom-spread" class="text-indigo-400">0.05</span>
+      </div>
+
+      <!-- Bids Ladder (Green) -->
+      <div id="dom-bids" class="flex-1 overflow-y-auto divide-y divide-gray-800/40 text-[11px] font-mono">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- DOM Bottom Quick Actions -->
+      <div class="p-2 border-t mt-border bg-[#181f2a] grid grid-cols-2 gap-1.5">
+        <button onclick="quickLimitFromDOM('BUY')" class="py-1 rounded bg-emerald-700/80 hover:bg-emerald-600 text-white font-semibold text-[11px]">
+          Buy Limit
+        </button>
+        <button onclick="quickLimitFromDOM('SELL')" class="py-1 rounded bg-red-700/80 hover:bg-red-600 text-white font-semibold text-[11px]">
+          Sell Limit
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Bottom Tabbed Toolbox / Terminal (200px) -->
+  <div class="h-52 border-t mt-border bg-[#181f2a] flex flex-col flex-shrink-0">
+    <!-- Tabs Header -->
+    <div class="h-7 bg-[#151b24] border-b mt-border flex items-center px-2 space-x-1">
+      <button onclick="setBottomTab('trade')" id="tab-btn-trade" class="tab-active px-3 py-1 font-medium text-[11px]">
+        Trade (<span id="open-positions-count">0</span>)
+      </button>
+      <button onclick="setBottomTab('orders')" id="tab-btn-orders" class="px-3 py-1 font-medium text-[11px] text-gray-400 hover:text-white">
+        Pending Orders (<span id="pending-orders-count">0</span>)
+      </button>
+      <button onclick="setBottomTab('history')" id="tab-btn-history" class="px-3 py-1 font-medium text-[11px] text-gray-400 hover:text-white">
+        History (<span id="history-trades-count">0</span>)
+      </button>
+      <button onclick="setBottomTab('journal')" id="tab-btn-journal" class="px-3 py-1 font-medium text-[11px] text-gray-400 hover:text-white">
+        Journal / LOB Events
+      </button>
+    </div>
+
+    <!-- Tab Contents Container -->
+    <div class="flex-1 overflow-y-auto p-1 font-mono text-[11px]">
+
+      <!-- TAB 1: Open Positions -->
+      <div id="tab-content-trade" class="block">
+        <table class="w-full text-left">
+          <thead class="bg-[#12161c] text-gray-400 sticky top-0 border-b mt-border">
+            <tr>
+              <th class="py-1 px-2">Ticket</th>
+              <th class="py-1 px-2">Time</th>
+              <th class="py-1 px-2">Type</th>
+              <th class="py-1 px-2">Volume</th>
+              <th class="py-1 px-2">Open Price</th>
+              <th class="py-1 px-2">S / L</th>
+              <th class="py-1 px-2">T / P</th>
+              <th class="py-1 px-2">Current</th>
+              <th class="py-1 px-2 text-right">Profit ($)</th>
+              <th class="py-1 px-2 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody id="positions-table-body" class="divide-y divide-gray-800">
+            <!-- Active positions injected here -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- TAB 2: Pending Orders -->
+      <div id="tab-content-orders" class="hidden">
+        <table class="w-full text-left">
+          <thead class="bg-[#12161c] text-gray-400 sticky top-0 border-b mt-border">
+            <tr>
+              <th class="py-1 px-2">Ticket</th>
+              <th class="py-1 px-2">Type</th>
+              <th class="py-1 px-2">Volume</th>
+              <th class="py-1 px-2">Limit Price</th>
+              <th class="py-1 px-2">Status</th>
+              <th class="py-1 px-2 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody id="orders-table-body" class="divide-y divide-gray-800">
+            <!-- Pending resting limit orders injected here -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- TAB 3: History -->
+      <div id="tab-content-history" class="hidden">
+        <table class="w-full text-left">
+          <thead class="bg-[#12161c] text-gray-400 sticky top-0 border-b mt-border">
+            <tr>
+              <th class="py-1 px-2">Ticket</th>
+              <th class="py-1 px-2">Close Time</th>
+              <th class="py-1 px-2">Type</th>
+              <th class="py-1 px-2">Volume</th>
+              <th class="py-1 px-2">Open Price</th>
+              <th class="py-1 px-2">Close Price</th>
+              <th class="py-1 px-2 text-right">Realized PnL ($)</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body" class="divide-y divide-gray-800">
+            <!-- Realized trades -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- TAB 4: Journal / Events -->
+      <div id="tab-content-journal" class="hidden font-mono text-[10px] space-y-0.5 text-gray-300 p-1">
+        <div id="journal-logs"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Bottom Account Margin Status Bar (MetaTrader Signature) -->
+  <footer class="h-6 bg-[#12161c] border-t mt-border flex items-center justify-between px-3 text-[11px] font-mono text-gray-300">
+    <div class="flex items-center space-x-6">
+      <span>Balance: <b id="bar-balance" class="text-white">$10,000.00</b></span>
+      <span>Equity: <b id="bar-equity" class="text-emerald-400">$10,000.00</b></span>
+      <span>Margin: <b id="bar-margin" class="text-yellow-400">$0.00</b></span>
+      <span>Free Margin: <b id="bar-freemargin" class="text-white">$10,000.00</b></span>
+      <span>Margin Level: <b id="bar-marginlevel" class="text-emerald-400">0.00%</b></span>
+    </div>
+    <div class="flex items-center space-x-2 text-gray-400 text-[10px]">
+      <span>Order Book Engine: <span class="text-blue-400 font-bold">ACTIVE</span></span>
+    </div>
+  </footer>
+
+  <!-- 6. New Order Dialog (MetaTrader F9 Style Modal) -->
+  <div id="order-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-[#181f2a] border mt-border rounded-xl w-96 shadow-2xl p-4 space-y-4">
+      <div class="flex justify-between items-center border-b mt-border pb-2">
+        <h3 class="font-bold text-white text-sm flex items-center gap-1.5">
+          <span>⚡</span> New Order - <span id="modal-sym">BTCUSD</span>
+        </h3>
+        <button onclick="closeOrderModal()" class="text-gray-400 hover:text-white font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-gray-400 text-[11px] mb-1">Execution Type</label>
+          <select id="modal-type" onchange="toggleModalFields()" class="w-full bg-[#12161c] border mt-border rounded p-1.5 text-white focus:outline-none">
+            <option value="MARKET">Market Execution</option>
+            <option value="LIMIT">Pending Limit Order</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-gray-400 text-[11px] mb-1">Volume (Lots)</label>
+          <input id="modal-volume" type="number" step="0.1" min="0.01" value="1.00" class="w-full bg-[#12161c] border mt-border rounded p-1.5 text-white font-mono focus:outline-none">
+        </div>
+
+        <div id="modal-price-group" class="hidden">
+          <label class="block text-gray-400 text-[11px] mb-1">Limit Price (Ticks)</label>
+          <input id="modal-price" type="number" step="1" value="100" class="w-full bg-[#12161c] border mt-border rounded p-1.5 text-white font-mono focus:outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-gray-400 text-[11px] mb-1">Stop Loss (S/L)</label>
+            <input id="modal-sl" type="number" step="1" placeholder="Optional" class="w-full bg-[#12161c] border mt-border rounded p-1.5 text-white font-mono focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-gray-400 text-[11px] mb-1">Take Profit (T/P)</label>
+            <input id="modal-tp" type="number" step="1" placeholder="Optional" class="w-full bg-[#12161c] border mt-border rounded p-1.5 text-white font-mono focus:outline-none">
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 pt-2 border-t mt-border">
+        <button onclick="submitModalOrder('SELL')" class="btn-sell py-2 rounded text-white font-bold tracking-wide">
+          SELL
+        </button>
+        <button onclick="submitModalOrder('BUY')" class="btn-buy py-2 rounded text-white font-bold tracking-wide">
+          BUY
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT: Full Matching Engine + Candlestick Canvas + MetaTrader State Manager -->
   <script>
-    class WebOrderBook {
+    // =========================================================================
+    // 1. Client-Side Deterministic Limit Order Book Engine
+    // =========================================================================
+    class MatchingEngineCore {
       constructor() {
         this.bids = new Map(); // price -> { price, orders: [], totalQty: 0 }
         this.asks = new Map(); // price -> { price, orders: [], totalQty: 0 }
-        this.orders = new Map(); // id -> order
+        this.orders = new Map();
         this.trades = [];
         this.seq = 0;
         this.tradeId = 0;
-        this.lastPrice = 100;
+        this.lastPrice = 100.0;
         this.totalVolume = 0;
       }
 
@@ -260,20 +409,14 @@
       }
 
       processOrder(id, side, type, qty, price) {
-        if (this.orders.has(id)) return { status: 'REJECT', reason: 'DUPLICATE_ORDER_ID' };
-        if (qty <= 0) return { status: 'REJECT', reason: 'INVALID_QUANTITY' };
-        if (type === 'LIMIT' && (price === undefined || price <= 0)) return { status: 'REJECT', reason: 'INVALID_PRICE' };
-
         this.seq++;
         const order = {
           id, side, type, price: type === 'LIMIT' ? price : null,
           originalQty: qty, remainingQty: qty, filledQty: 0, seq: this.seq
         };
         this.orders.set(id, order);
+        const executedTrades = [];
 
-        const newTrades = [];
-
-        // Matching logic
         if (side === 'BUY') {
           while (order.remainingQty > 0 && this.asks.size > 0) {
             const bestAsk = this.getBestAsk();
@@ -294,30 +437,17 @@
               this.tradeId++;
               this.totalVolume += fill;
               this.lastPrice = tradePrice;
-              const trade = {
-                id: this.tradeId,
-                makerId: maker.id,
-                takerId: order.id,
-                side: 'SELL',
-                price: tradePrice,
-                qty: fill
-              };
-              this.trades.unshift(trade);
-              newTrades.push(trade);
+              const t = { id: this.tradeId, makerId: maker.id, takerId: order.id, side: 'SELL', price: tradePrice, qty: fill, time: new Date() };
+              this.trades.unshift(t);
+              executedTrades.push(t);
 
-              if (maker.remainingQty === 0) {
-                level.orders.shift();
-              }
+              if (maker.remainingQty === 0) level.orders.shift();
             }
-            if (level.totalQty === 0 || level.orders.length === 0) {
-              this.asks.delete(bestAsk);
-            }
+            if (level.totalQty === 0 || level.orders.length === 0) this.asks.delete(bestAsk);
           }
 
           if (order.remainingQty > 0 && type === 'LIMIT') {
-            if (!this.bids.has(order.price)) {
-              this.bids.set(order.price, { price: order.price, orders: [], totalQty: 0 });
-            }
+            if (!this.bids.has(order.price)) this.bids.set(order.price, { price: order.price, orders: [], totalQty: 0 });
             const lvl = this.bids.get(order.price);
             lvl.orders.push(order);
             lvl.totalQty += order.remainingQty;
@@ -342,278 +472,600 @@
               this.tradeId++;
               this.totalVolume += fill;
               this.lastPrice = tradePrice;
-              const trade = {
-                id: this.tradeId,
-                makerId: maker.id,
-                takerId: order.id,
-                side: 'BUY',
-                price: tradePrice,
-                qty: fill
-              };
-              this.trades.unshift(trade);
-              newTrades.push(trade);
+              const t = { id: this.tradeId, makerId: maker.id, takerId: order.id, side: 'BUY', price: tradePrice, qty: fill, time: new Date() };
+              this.trades.unshift(t);
+              executedTrades.push(t);
 
-              if (maker.remainingQty === 0) {
-                level.orders.shift();
-              }
+              if (maker.remainingQty === 0) level.orders.shift();
             }
-            if (level.totalQty === 0 || level.orders.length === 0) {
-              this.bids.delete(bestBid);
-            }
+            if (level.totalQty === 0 || level.orders.length === 0) this.bids.delete(bestBid);
           }
 
           if (order.remainingQty > 0 && type === 'LIMIT') {
-            if (!this.asks.has(order.price)) {
-              this.asks.set(order.price, { price: order.price, orders: [], totalQty: 0 });
-            }
+            if (!this.asks.has(order.price)) this.asks.set(order.price, { price: order.price, orders: [], totalQty: 0 });
             const lvl = this.asks.get(order.price);
             lvl.orders.push(order);
             lvl.totalQty += order.remainingQty;
           }
         }
 
-        return { status: 'OK', trades: newTrades };
+        return { order, trades: executedTrades };
       }
 
       cancelOrder(id) {
         const order = this.orders.get(id);
         if (!order || order.remainingQty === 0) return false;
-
         const book = order.side === 'BUY' ? this.bids : this.asks;
         const level = book.get(order.price);
         if (level) {
           level.totalQty -= order.remainingQty;
           level.orders = level.orders.filter(o => o.id !== id);
-          if (level.totalQty === 0 || level.orders.length === 0) {
-            book.delete(order.price);
-          }
+          if (level.totalQty === 0 || level.orders.length === 0) book.delete(order.price);
         }
         order.remainingQty = 0;
         return true;
       }
     }
 
-    // UI state & wiring
-    const book = new WebOrderBook();
-    let currentSide = 'BUY';
-    let currentType = 'LIMIT';
-    let simInterval = null;
-    let simStep = 0;
+    // =========================================================================
+    // 2. MetaTrader Account & Trade Management State
+    // =========================================================================
+    const engine = new MatchingEngineCore();
 
-    // Elements
-    const tabBuy = document.getElementById('tab-buy');
-    const tabSell = document.getElementById('tab-sell');
-    const typeLimit = document.getElementById('type-limit');
-    const typeMarket = document.getElementById('type-market');
-    const priceGroup = document.getElementById('price-group');
-    const inputPrice = document.getElementById('input-price');
-    const inputQty = document.getElementById('input-qty');
-    const btnSubmit = document.getElementById('btn-submit-order');
-    const asksContainer = document.getElementById('asks-container');
-    const bidsContainer = document.getElementById('bids-container');
-    const tradesContainer = document.getElementById('trades-container');
-    const activeOrdersContainer = document.getElementById('active-orders-container');
-    const activeOrdersCount = document.getElementById('active-orders-count');
-    const btnToggleSim = document.getElementById('btn-toggle-sim');
-    const btnStepSim = document.getElementById('btn-step-sim');
-    const btnResetBook = document.getElementById('btn-reset-book');
+    let account = {
+      balance: 10000.00,
+      equity: 10000.00,
+      margin: 0.00,
+      freeMargin: 10000.00,
+      marginLevel: 0.00,
+      positions: [],
+      pendingOrders: [],
+      closedHistory: []
+    };
 
-    tabBuy.addEventListener('click', () => setSide('BUY'));
-    tabSell.addEventListener('click', () => setSide('SELL'));
-    typeLimit.addEventListener('click', () => setType('LIMIT'));
-    typeMarket.addEventListener('click', () => setType('MARKET'));
-    btnSubmit.addEventListener('click', handleSubmit);
-    btnToggleSim.addEventListener('click', toggleSimulation);
-    btnStepSim.addEventListener('click', stepSimulation);
-    btnResetBook.addEventListener('click', resetOrderBook);
+    let ticketCounter = 10001;
+    let autoTradeInterval = null;
+    let timeframeSeconds = 1;
+    let chartMode = 'candle';
+    let showMA = true;
 
-    function setSide(side) {
-      currentSide = side;
-      if (side === 'BUY') {
-        tabBuy.className = 'py-1.5 rounded-md font-bold text-xs bg-emerald-600 text-white shadow transition';
-        tabSell.className = 'py-1.5 rounded-md font-bold text-xs text-[var(--muted-foreground,#94a3b8)] hover:text-white transition';
-        btnSubmit.className = 'w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow transition';
-        btnSubmit.textContent = `SUBMIT BUY ${currentType} ORDER`;
-      } else {
-        tabSell.className = 'py-1.5 rounded-md font-bold text-xs bg-red-600 text-white shadow transition';
-        tabBuy.className = 'py-1.5 rounded-md font-bold text-xs text-[var(--muted-foreground,#94a3b8)] hover:text-white transition';
-        btnSubmit.className = 'w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-sm shadow transition';
-        btnSubmit.textContent = `SUBMIT SELL ${currentType} ORDER`;
+    // Candlestick history: Array of { time, open, high, low, close, volume }
+    let candles = [];
+    let currentCandle = null;
+
+    // Symbols list for Market Watch
+    const symbols = [
+      { sym: 'BTCUSD', bid: 100.0, ask: 100.2, spread: 2 },
+      { sym: 'ETHUSD', bid: 3200.5, ask: 3201.0, spread: 5 },
+      { sym: 'EURUSD', bid: 1.0850, ask: 1.0852, spread: 2 },
+      { sym: 'XAUUSD', bid: 2350.2, ask: 2350.6, spread: 4 },
+      { sym: 'US500',  bid: 5200.0, ask: 5200.8, spread: 8 },
+      { sym: 'NVDA',   bid: 124.50, ask: 124.60, spread: 10 },
+    ];
+
+    // Initialize initial seed liquidity
+    function initSeedBook() {
+      const base = 100;
+      for (let i = 1; i <= 6; i++) {
+        engine.processOrder(`seed_b_${i}`, 'BUY', 'LIMIT', Math.floor(Math.random() * 20 + 5), base - i);
+        engine.processOrder(`seed_a_${i}`, 'SELL', 'LIMIT', Math.floor(Math.random() * 20 + 5), base + i);
+      }
+      initCandles(base);
+    }
+
+    function initCandles(basePrice) {
+      const now = Math.floor(Date.now() / 1000);
+      let p = basePrice;
+      for (let i = 40; i >= 0; i--) {
+        const o = p;
+        const delta = (Math.random() - 0.49) * 2;
+        const c = Math.max(10, o + delta);
+        const h = Math.max(o, c) + Math.random() * 1.5;
+        const l = Math.min(o, c) - Math.random() * 1.5;
+        candles.push({ time: now - i * timeframeSeconds, open: o, high: h, low: l, close: c, volume: Math.floor(Math.random() * 40 + 10) });
+        p = c;
+      }
+      currentCandle = { ...candles[candles.length - 1], volume: 0 };
+    }
+
+    // =========================================================================
+    // 3. Canvas Candlestick Chart Renderer (Zero External Libraries)
+    // =========================================================================
+    const canvas = document.getElementById('chart-canvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      const wrapper = document.getElementById('chart-wrapper');
+      canvas.width = wrapper.clientWidth * window.devicePixelRatio;
+      canvas.height = wrapper.clientHeight * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function updateCandleWithTrade(price, qty) {
+      if (!currentCandle) return;
+      currentCandle.high = Math.max(currentCandle.high, price);
+      currentCandle.low = Math.min(currentCandle.low, price);
+      currentCandle.close = price;
+      currentCandle.volume += qty;
+
+      const now = Math.floor(Date.now() / 1000);
+      if (now - currentCandle.time >= timeframeSeconds) {
+        candles.push({ ...currentCandle });
+        if (candles.length > 100) candles.shift();
+        currentCandle = { time: now, open: price, high: price, low: price, close: price, volume: 0 };
       }
     }
 
-    function setType(type) {
-      currentType = type;
-      if (type === 'LIMIT') {
-        typeLimit.className = 'py-1.5 px-3 rounded-lg border border-indigo-500 bg-indigo-500/20 text-indigo-300 text-xs font-semibold';
-        typeMarket.className = 'py-1.5 px-3 rounded-lg border border-[var(--border,#334155)] text-[var(--muted-foreground,#94a3b8)] hover:text-white text-xs font-semibold';
-        priceGroup.style.display = 'block';
-      } else {
-        typeMarket.className = 'py-1.5 px-3 rounded-lg border border-indigo-500 bg-indigo-500/20 text-indigo-300 text-xs font-semibold';
-        typeLimit.className = 'py-1.5 px-3 rounded-lg border border-[var(--border,#334155)] text-[var(--muted-foreground,#94a3b8)] hover:text-white text-xs font-semibold';
-        priceGroup.style.display = 'none';
+    function drawChart() {
+      const w = canvas.width / window.devicePixelRatio;
+      const h = canvas.height / window.devicePixelRatio;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // Background grid
+      ctx.strokeStyle = '#1a222f';
+      ctx.lineWidth = 1;
+      const gridStep = 40;
+      for (let x = 0; x < w; x += gridStep) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
       }
-      setSide(currentSide);
-    }
-
-    window.adjustPrice = function(delta) {
-      inputPrice.value = Math.max(1, parseInt(inputPrice.value || 100) + delta);
-    };
-
-    function handleSubmit() {
-      const qty = parseInt(inputQty.value);
-      const price = currentType === 'LIMIT' ? parseInt(inputPrice.value) : null;
-      if (!qty || qty <= 0) return alert('Invalid Quantity');
-      if (currentType === 'LIMIT' && (!price || price <= 0)) return alert('Invalid Price');
-
-      const oid = 'user_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
-      book.processOrder(oid, currentSide, currentType, qty, price);
-      renderUI();
-    }
-
-    window.cancelOrder = function(id) {
-      book.cancelOrder(id);
-      renderUI();
-    };
-
-    function renderUI() {
-      const bb = book.getBestBid();
-      const ba = book.getBestAsk();
-      const spread = (bb !== null && ba !== null) ? (ba - bb) : '--';
-
-      document.getElementById('metric-last-price').textContent = book.lastPrice;
-      document.getElementById('metric-spread').textContent = spread;
-      document.getElementById('metric-volume').textContent = book.totalVolume.toLocaleString();
-      document.getElementById('metric-trades').textContent = book.trades.length.toLocaleString();
-      document.getElementById('ladder-spread').textContent = `Spread: ${spread} ticks`;
-
-      // Render Asks (sorted ascending, displayed descending top-to-bottom)
-      const sortedAsks = Array.from(book.asks.values()).sort((a, b) => b.price - a.price);
-      const maxAskQty = Math.max(1, ...sortedAsks.map(l => l.totalQty));
-      asksContainer.innerHTML = sortedAsks.map(level => {
-        const pct = Math.min(100, Math.round((level.totalQty / maxAskQty) * 100));
-        return `
-          <div class="relative grid grid-cols-3 text-xs font-mono px-2 py-1 rounded hover:bg-red-500/10 cursor-pointer">
-            <div class="absolute inset-y-0 right-0 depth-bar-ask rounded-r" style="width: ${pct}%"></div>
-            <div class="relative text-[var(--muted-foreground,#94a3b8)] text-left">${level.orders.length} order${level.orders.length > 1 ? 's' : ''}</div>
-            <div class="relative text-red-400 font-bold text-right">${level.price}</div>
-            <div class="relative text-right font-medium">${level.totalQty}</div>
-          </div>
-        `;
-      }).join('') || '<div class="text-center text-xs text-[var(--muted-foreground,#94a3b8)] py-4">No resting asks</div>';
-
-      // Render Bids (sorted descending)
-      const sortedBids = Array.from(book.bids.values()).sort((a, b) => b.price - a.price);
-      const maxBidQty = Math.max(1, ...sortedBids.map(l => l.totalQty));
-      bidsContainer.innerHTML = sortedBids.map(level => {
-        const pct = Math.min(100, Math.round((level.totalQty / maxBidQty) * 100));
-        return `
-          <div class="relative grid grid-cols-3 text-xs font-mono px-2 py-1 rounded hover:bg-emerald-500/10 cursor-pointer">
-            <div class="absolute inset-y-0 right-0 depth-bar-bid rounded-r" style="width: ${pct}%"></div>
-            <div class="relative text-[var(--muted-foreground,#94a3b8)] text-left">${level.orders.length} order${level.orders.length > 1 ? 's' : ''}</div>
-            <div class="relative text-emerald-400 font-bold text-right">${level.price}</div>
-            <div class="relative text-right font-medium">${level.totalQty}</div>
-          </div>
-        `;
-      }).join('') || '<div class="text-center text-xs text-[var(--muted-foreground,#94a3b8)] py-4">No resting bids</div>';
-
-      // Render Recent Trades (top 15)
-      tradesContainer.innerHTML = book.trades.slice(0, 15).map(t => `
-        <div class="grid grid-cols-4 px-2 py-1 rounded hover:bg-[var(--sidebar,#334155)] border-b border-[var(--border,#334155)]/40 text-[11px]">
-          <div class="text-[var(--muted-foreground,#94a3b8)]">#${t.id}</div>
-          <div class="text-right font-bold ${t.side === 'BUY' ? 'text-emerald-400' : 'text-red-400'}">${t.price}</div>
-          <div class="text-right font-medium">${t.qty}</div>
-          <div class="text-right text-[10px] text-[var(--muted-foreground,#94a3b8)]">${t.side}</div>
-        </div>
-      `).join('') || '<div class="text-center text-xs text-[var(--muted-foreground,#94a3b8)] py-8">Awaiting executions...</div>';
-
-      // Render Active Orders
-      const activeList = Array.from(book.orders.values()).filter(o => o.remainingQty > 0);
-      activeOrdersCount.textContent = `${activeList.length} active`;
-      activeOrdersContainer.innerHTML = activeList.map(o => `
-        <div class="grid grid-cols-4 items-center px-2 py-1 rounded hover:bg-[var(--sidebar,#334155)] border-b border-[var(--border,#334155)]/40 text-[11px]">
-          <div class="truncate text-[var(--muted-foreground,#94a3b8)]">${o.id}</div>
-          <div class="font-bold ${o.side === 'BUY' ? 'text-emerald-400' : 'text-red-400'}">${o.side}</div>
-          <div class="font-mono">${o.remainingQty}@${o.price}</div>
-          <div class="text-right">
-            <button onclick="cancelOrder('${o.id}')" class="px-1.5 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[10px]">Cancel</button>
-          </div>
-        </div>
-      `).join('') || '<div class="text-center text-xs text-[var(--muted-foreground,#94a3b8)] py-8">No resting orders</div>';
-    }
-
-    // Quick injection helpers
-    window.injectSpreadQuotes = function() {
-      const mid = book.lastPrice || 100;
-      for (let i = 1; i <= 4; i++) {
-        book.processOrder(`seed_b_${Date.now()}_${i}`, 'BUY', 'LIMIT', Math.floor(Math.random() * 20 + 5), mid - i);
-        book.processOrder(`seed_a_${Date.now()}_${i}`, 'SELL', 'LIMIT', Math.floor(Math.random() * 20 + 5), mid + i);
+      for (let y = 0; y < h; y += gridStep) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       }
-      renderUI();
-    };
 
-    window.injectMarketSweep = function() {
-      const side = Math.random() < 0.5 ? 'BUY' : 'SELL';
-      const qty = Math.floor(Math.random() * 40 + 20);
-      book.processOrder(`sweep_${Date.now()}`, side, 'MARKET', qty);
-      renderUI();
-    };
+      const allCandles = [...candles, currentCandle].filter(Boolean);
+      if (allCandles.length < 2) return;
 
-    function stepSimulation() {
-      simStep++;
-      const mid = book.lastPrice || 100;
-      const p = Math.random();
-      if (p < 0.65) {
-        // Passive limit order
-        const side = Math.random() < 0.5 ? 'BUY' : 'SELL';
-        const offset = Math.floor((Math.random() - 0.5) * 8);
-        const price = Math.max(1, mid + offset);
-        const qty = Math.floor(Math.random() * 25 + 5);
-        book.processOrder(`sim_${simStep}`, side, 'LIMIT', qty, price);
-      } else if (p < 0.85) {
-        // Market order
-        const side = Math.random() < 0.5 ? 'BUY' : 'SELL';
-        const qty = Math.floor(Math.random() * 20 + 5);
-        book.processOrder(`sim_${simStep}`, side, 'MARKET', qty);
-      } else {
-        // Random cancel
-        const active = Array.from(book.orders.values()).filter(o => o.remainingQty > 0);
-        if (active.length > 0) {
-          const target = active[Math.floor(Math.random() * active.length)];
-          book.cancelOrder(target.id);
+      const visible = allCandles.slice(-50);
+      let minP = Math.min(...visible.map(c => c.low));
+      let maxP = Math.max(...visible.map(c => c.high));
+      if (minP === maxP) { minP -= 1; maxP += 1; }
+      const padding = (maxP - minP) * 0.1;
+      minP -= padding;
+      maxP += padding;
+
+      const rightAxisWidth = 60;
+      const chartWidth = w - rightAxisWidth;
+      const candleWidth = Math.max(4, Math.floor(chartWidth / visible.length) - 3);
+
+      function getY(p) {
+        return h - 30 - ((p - minP) / (maxP - minP)) * (h - 60);
+      }
+
+      // Draw Candlesticks
+      visible.forEach((c, idx) => {
+        const x = idx * (candleWidth + 3) + 20;
+        const yOpen = getY(c.open);
+        const yClose = getY(c.close);
+        const yHigh = getY(c.high);
+        const yLow = getY(c.low);
+        const isUp = c.close >= c.open;
+
+        ctx.strokeStyle = isUp ? '#22c55e' : '#ef4444';
+        ctx.fillStyle = isUp ? '#22c55e' : '#ef4444';
+        ctx.lineWidth = 1.2;
+
+        // Wick
+        ctx.beginPath();
+        ctx.moveTo(x + candleWidth / 2, yHigh);
+        ctx.lineTo(x + candleWidth / 2, yLow);
+        ctx.stroke();
+
+        // Body
+        const top = Math.min(yOpen, yClose);
+        const bodyHeight = Math.max(2, Math.abs(yClose - yOpen));
+        ctx.fillRect(x, top, candleWidth, bodyHeight);
+      });
+
+      // Moving Average (SMA 20)
+      if (showMA && visible.length >= 5) {
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < visible.length; i++) {
+          const slice = visible.slice(Math.max(0, i - 19), i + 1);
+          const ma = slice.reduce((acc, v) => acc + v.close, 0) / slice.length;
+          const x = i * (candleWidth + 3) + 20 + candleWidth / 2;
+          const y = getY(ma);
+          if (!started) { ctx.moveTo(x, y); started = true; }
+          else { ctx.lineTo(x, y); }
+        }
+        ctx.stroke();
+      }
+
+      // Current Price Line
+      const curPrice = engine.lastPrice;
+      const curY = getY(curPrice);
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = '#eab308';
+      ctx.beginPath();
+      ctx.moveTo(0, curY);
+      ctx.lineTo(chartWidth, curY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Right Price Scale Bar
+      ctx.fillStyle = '#181f2a';
+      ctx.fillRect(chartWidth, 0, rightAxisWidth, h);
+      ctx.strokeStyle = '#232b38';
+      ctx.beginPath(); ctx.moveTo(chartWidth, 0); ctx.lineTo(chartWidth, h); ctx.stroke();
+
+      // Current Price Tag on axis
+      ctx.fillStyle = '#eab308';
+      ctx.fillRect(chartWidth + 1, curY - 9, rightAxisWidth - 2, 18);
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText(curPrice.toFixed(2), chartWidth + 6, curY + 4);
+
+      // Axis ticks
+      ctx.fillStyle = '#64748b';
+      ctx.font = '10px monospace';
+      for (let i = 0; i < 5; i++) {
+        const p = minP + (i / 4) * (maxP - minP);
+        const y = getY(p);
+        ctx.fillText(p.toFixed(2), chartWidth + 6, y + 3);
+      }
+    }
+
+    // =========================================================================
+    // 4. Order Execution, One-Click Trading & Position Management
+    // =========================================================================
+    function quickTrade(side) {
+      const lots = parseFloat(document.getElementById('oct-lot').value) || 1.0;
+      const qty = Math.round(lots * 10);
+      const ticket = ticketCounter++;
+
+      const res = engine.processOrder(`mkt_${ticket}`, side, 'MARKET', qty);
+      if (res.trades.length > 0) {
+        const fillPrice = res.trades[0].price;
+        account.positions.push({
+          ticket,
+          time: new Date().toLocaleTimeString(),
+          sym: 'BTCUSD',
+          type: side,
+          volume: lots,
+          qty,
+          openPrice: fillPrice,
+          sl: null,
+          tp: null
+        });
+        logJournal(`Order #${ticket} ${side} ${lots} lots filled at ${fillPrice.toFixed(2)}`);
+      }
+      renderAll();
+    }
+
+    function quickLimitFromDOM(side) {
+      const price = side === 'BUY' ? (engine.getBestBid() || 100) - 1 : (engine.getBestAsk() || 100) + 1;
+      const lots = 1.0;
+      const qty = 10;
+      const ticket = ticketCounter++;
+      engine.processOrder(`lmt_${ticket}`, side, 'LIMIT', qty, price);
+      account.pendingOrders.push({ ticket, id: `lmt_${ticket}`, type: `${side} LIMIT`, volume: lots, price });
+      logJournal(`Pending Order #${ticket} ${side} LIMIT ${lots} lots @ ${price}`);
+      renderAll();
+    }
+
+    function closePosition(ticket) {
+      const idx = account.positions.findIndex(p => p.ticket === ticket);
+      if (idx === -1) return;
+      const pos = account.positions[idx];
+      const cur = engine.lastPrice;
+      const diff = pos.type === 'BUY' ? (cur - pos.openPrice) : (pos.openPrice - cur);
+      const profit = diff * pos.volume * 100;
+
+      account.balance += profit;
+      account.closedHistory.unshift({
+        ticket: pos.ticket,
+        closeTime: new Date().toLocaleTimeString(),
+        type: pos.type,
+        volume: pos.volume,
+        openPrice: pos.openPrice,
+        closePrice: cur,
+        profit
+      });
+
+      account.positions.splice(idx, 1);
+      logJournal(`Closed Position #${ticket} | PnL: $${profit.toFixed(2)}`);
+      renderAll();
+    }
+
+    function cancelPending(ticket) {
+      const idx = account.pendingOrders.findIndex(p => p.ticket === ticket);
+      if (idx === -1) return;
+      const ord = account.pendingOrders[idx];
+      engine.cancelOrder(ord.id);
+      account.pendingOrders.splice(idx, 1);
+      logJournal(`Cancelled Pending Order #${ticket}`);
+      renderAll();
+    }
+
+    // Check Stop Loss & Take Profit Triggers
+    function checkSLTP(curPrice) {
+      for (let i = account.positions.length - 1; i >= 0; i--) {
+        const p = account.positions[i];
+        if (p.type === 'BUY') {
+          if (p.sl && curPrice <= p.sl) { closePosition(p.ticket); logJournal(`[SL TRIGGER] Position #${p.ticket} hit S/L`); }
+          else if (p.tp && curPrice >= p.tp) { closePosition(p.ticket); logJournal(`[TP TRIGGER] Position #${p.ticket} hit T/P`); }
+        } else {
+          if (p.sl && curPrice >= p.sl) { closePosition(p.ticket); logJournal(`[SL TRIGGER] Position #${p.ticket} hit S/L`); }
+          else if (p.tp && curPrice <= p.tp) { closePosition(p.ticket); logJournal(`[TP TRIGGER] Position #${p.ticket} hit T/P`); }
         }
       }
-      renderUI();
     }
 
-    function toggleSimulation() {
-      if (simInterval) {
-        clearInterval(simInterval);
-        simInterval = null;
-        document.getElementById('sim-icon').textContent = '▶';
-        document.getElementById('sim-text').textContent = 'Start Simulation';
-        btnToggleSim.className = 'px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1.5 transition shadow';
+    // =========================================================================
+    // 5. Render All MT5 Panels (DOM, Market Watch, Positions, Margin Bar)
+    // =========================================================================
+    function renderAll() {
+      const bb = engine.getBestBid() || 100.0;
+      const ba = engine.getBestAsk() || 100.2;
+      const spread = Math.max(0, ba - bb);
+
+      // 1. One-Click Trading Widget updates
+      document.getElementById('oct-bid-price').textContent = bb.toFixed(2);
+      document.getElementById('oct-ask-price').textContent = ba.toFixed(2);
+      document.getElementById('bar-spread').textContent = spread.toFixed(2);
+      document.getElementById('dom-spread').textContent = spread.toFixed(2);
+
+      // 2. Market Watch update
+      document.getElementById('market-watch-body').innerHTML = symbols.map((s, idx) => {
+        const bid = idx === 0 ? bb : s.bid;
+        const ask = idx === 0 ? ba : s.ask;
+        return `
+          <tr class="mt-bg-hover cursor-pointer ${idx === 0 ? 'bg-[#1d2635]' : ''}">
+            <td class="py-1 px-2 font-bold ${idx === 0 ? 'text-blue-400' : 'text-gray-300'}">${s.sym}</td>
+            <td class="py-1 px-1 text-right text-emerald-400">${bid.toFixed(idx === 2 ? 4 : 2)}</td>
+            <td class="py-1 px-2 text-right text-red-400">${ask.toFixed(idx === 2 ? 4 : 2)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      // 3. Depth of Market (DOM) Ladder
+      const sortedAsks = Array.from(engine.asks.values()).sort((a, b) => b.price - a.price).slice(0, 6);
+      const maxAskQty = Math.max(1, ...sortedAsks.map(l => l.totalQty));
+      document.getElementById('dom-asks').innerHTML = sortedAsks.map(l => {
+        const pct = Math.round((l.totalQty / maxAskQty) * 100);
+        return `
+          <div class="relative grid grid-cols-3 px-2 py-0.5 hover:bg-red-500/10 cursor-pointer">
+            <div class="absolute inset-y-0 right-0 dom-ask-bar" style="width: ${pct}%"></div>
+            <div></div>
+            <div class="text-center font-bold text-red-400 z-10">${l.price.toFixed(2)}</div>
+            <div class="text-right z-10 text-gray-200">${l.totalQty}</div>
+          </div>
+        `;
+      }).join('') || '<div class="text-center py-2 text-gray-500 text-[10px]">No Asks</div>';
+
+      const sortedBids = Array.from(engine.bids.values()).sort((a, b) => b.price - a.price).slice(0, 6);
+      const maxBidQty = Math.max(1, ...sortedBids.map(l => l.totalQty));
+      document.getElementById('dom-bids').innerHTML = sortedBids.map(l => {
+        const pct = Math.round((l.totalQty / maxBidQty) * 100);
+        return `
+          <div class="relative grid grid-cols-3 px-2 py-0.5 hover:bg-emerald-500/10 cursor-pointer">
+            <div class="absolute inset-y-0 left-0 dom-bid-bar" style="width: ${pct}%"></div>
+            <div class="text-left z-10 text-gray-200">${l.totalQty}</div>
+            <div class="text-center font-bold text-emerald-400 z-10">${l.price.toFixed(2)}</div>
+            <div></div>
+          </div>
+        `;
+      }).join('') || '<div class="text-center py-2 text-gray-500 text-[10px]">No Bids</div>';
+
+      // 4. Open Positions & Dynamic PnL calculation
+      let totalFloatingPnL = 0;
+      let usedMargin = 0;
+      document.getElementById('positions-table-body').innerHTML = account.positions.map(p => {
+        const cur = engine.lastPrice;
+        const diff = p.type === 'BUY' ? (cur - p.openPrice) : (p.openPrice - cur);
+        const profit = diff * p.volume * 100;
+        totalFloatingPnL += profit;
+        usedMargin += p.volume * 100; // 1:100 leverage estimate
+
+        return `
+          <tr class="hover:bg-[#1f2837]">
+            <td class="py-1 px-2 font-mono">#${p.ticket}</td>
+            <td class="py-1 px-2 text-gray-400">${p.time}</td>
+            <td class="py-1 px-2 font-bold ${p.type === 'BUY' ? 'text-emerald-400' : 'text-red-400'}">${p.type}</td>
+            <td class="py-1 px-2">${p.volume.toFixed(2)}</td>
+            <td class="py-1 px-2">${p.openPrice.toFixed(2)}</td>
+            <td class="py-1 px-2 text-gray-400">${p.sl ? p.sl.toFixed(2) : '-'}</td>
+            <td class="py-1 px-2 text-gray-400">${p.tp ? p.tp.toFixed(2) : '-'}</td>
+            <td class="py-1 px-2 font-bold text-white">${cur.toFixed(2)}</td>
+            <td class="py-1 px-2 text-right font-bold ${profit >= 0 ? 'text-emerald-400' : 'text-red-400'}">${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}</td>
+            <td class="py-1 px-2 text-center">
+              <button onclick="closePosition(${p.ticket})" class="px-1.5 py-0.5 rounded bg-red-600/30 hover:bg-red-600 text-red-200 text-[10px]">Close</button>
+            </td>
+          </tr>
+        `;
+      }).join('') || '<tr><td colspan="10" class="text-center py-4 text-gray-500 italic">No open market positions</td></tr>';
+
+      // 5. Pending Orders Table
+      document.getElementById('orders-table-body').innerHTML = account.pendingOrders.map(o => `
+        <tr class="hover:bg-[#1f2837]">
+          <td class="py-1 px-2 font-mono">#${o.ticket}</td>
+          <td class="py-1 px-2 font-bold text-blue-400">${o.type}</td>
+          <td class="py-1 px-2">${o.volume.toFixed(2)}</td>
+          <td class="py-1 px-2 font-mono">${o.price.toFixed(2)}</td>
+          <td class="py-1 px-2 text-yellow-400">Placed / Resting</td>
+          <td class="py-1 px-2 text-center">
+            <button onclick="cancelPending(${o.ticket})" class="px-1.5 py-0.5 rounded bg-red-600/30 hover:bg-red-600 text-red-200 text-[10px]">Cancel</button>
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="6" class="text-center py-4 text-gray-500 italic">No pending limit orders</td></tr>';
+
+      // 6. History Table
+      document.getElementById('history-table-body').innerHTML = account.closedHistory.map(h => `
+        <tr class="hover:bg-[#1f2837]">
+          <td class="py-1 px-2 font-mono">#${h.ticket}</td>
+          <td class="py-1 px-2 text-gray-400">${h.closeTime}</td>
+          <td class="py-1 px-2 font-bold ${h.type === 'BUY' ? 'text-emerald-400' : 'text-red-400'}">${h.type}</td>
+          <td class="py-1 px-2">${h.volume.toFixed(2)}</td>
+          <td class="py-1 px-2">${h.openPrice.toFixed(2)}</td>
+          <td class="py-1 px-2">${h.closePrice.toFixed(2)}</td>
+          <td class="py-1 px-2 text-right font-bold ${h.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}">${h.profit >= 0 ? '+' : ''}$${h.profit.toFixed(2)}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="7" class="text-center py-4 text-gray-500 italic">No closed trades</td></tr>';
+
+      // 7. Margin Status Bar Updates
+      account.equity = account.balance + totalFloatingPnL;
+      account.margin = usedMargin;
+      account.freeMargin = account.equity - account.margin;
+      account.marginLevel = account.margin > 0 ? (account.equity / account.margin) * 100 : 0;
+
+      document.getElementById('bar-balance').textContent = `$${account.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+      document.getElementById('bar-equity').textContent = `$${account.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+      document.getElementById('bar-margin').textContent = `$${account.margin.toFixed(2)}`;
+      document.getElementById('bar-freemargin').textContent = `$${account.freeMargin.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+      document.getElementById('bar-marginlevel').textContent = account.margin > 0 ? `${account.marginLevel.toFixed(1)}%` : '0.00%';
+
+      // 8. Badges count
+      document.getElementById('open-positions-count').textContent = account.positions.length;
+      document.getElementById('pending-orders-count').textContent = account.pendingOrders.length;
+      document.getElementById('history-trades-count').textContent = account.closedHistory.length;
+      document.getElementById('info-seq').textContent = engine.seq.toLocaleString();
+      document.getElementById('info-trades').textContent = engine.trades.length.toLocaleString();
+      document.getElementById('info-volume').textContent = `${engine.totalVolume.toLocaleString()} lots`;
+
+      drawChart();
+    }
+
+    // =========================================================================
+    // 6. Bot Simulation (Algo Engine)
+    // =========================================================================
+    function stepAlgoEngine() {
+      const mid = engine.lastPrice || 100;
+      const p = Math.random();
+
+      if (p < 0.60) {
+        // Limit order quoting (Market Maker)
+        const side = Math.random() < 0.5 ? 'BUY' : 'SELL';
+        const offset = Math.floor((Math.random() - 0.48) * 6);
+        const price = Math.max(1, mid + offset);
+        const qty = Math.floor(Math.random() * 20 + 5);
+        const res = engine.processOrder(`algo_${Date.now()}`, side, 'LIMIT', qty, price);
+        res.trades.forEach(t => updateCandleWithTrade(t.price, t.qty));
+      } else if (p < 0.85) {
+        // Market aggressor
+        const side = Math.random() < 0.5 ? 'BUY' : 'SELL';
+        const qty = Math.floor(Math.random() * 15 + 5);
+        const res = engine.processOrder(`algo_mkt_${Date.now()}`, side, 'MARKET', qty);
+        res.trades.forEach(t => updateCandleWithTrade(t.price, t.qty));
       } else {
-        simInterval = setInterval(stepSimulation, 350);
-        document.getElementById('sim-icon').textContent = '⏸';
-        document.getElementById('sim-text').textContent = 'Pause Simulation';
-        btnToggleSim.className = 'px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs flex items-center gap-1.5 transition shadow';
+        // Random cancellation
+        const activeOrders = Array.from(engine.orders.values()).filter(o => o.remainingQty > 0);
+        if (activeOrders.length > 0) {
+          const target = activeOrders[Math.floor(Math.random() * activeOrders.length)];
+          engine.cancelOrder(target.id);
+        }
+      }
+
+      checkSLTP(engine.lastPrice);
+      renderAll();
+    }
+
+    document.getElementById('btn-toggle-algo').addEventListener('click', () => {
+      if (autoTradeInterval) {
+        clearInterval(autoTradeInterval);
+        autoTradeInterval = null;
+        document.getElementById('algo-icon').textContent = '▶';
+        document.getElementById('algo-text').textContent = 'Auto Trading (Algo)';
+        document.getElementById('btn-toggle-algo').className = 'px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium flex items-center gap-1 shadow';
+      } else {
+        autoTradeInterval = setInterval(stepAlgoEngine, 250);
+        document.getElementById('algo-icon').textContent = '⏸';
+        document.getElementById('algo-text').textContent = 'Pause Algo Trading';
+        document.getElementById('btn-toggle-algo').className = 'px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white font-medium flex items-center gap-1 shadow';
+      }
+    });
+
+    // =========================================================================
+    // 7. Modal & UI Navigation Helpers
+    // =========================================================================
+    function setBottomTab(tab) {
+      ['trade', 'orders', 'history', 'journal'].forEach(t => {
+        document.getElementById(`tab-content-${t}`).classList.add('hidden');
+        document.getElementById(`tab-btn-${t}`).className = 'px-3 py-1 font-medium text-[11px] text-gray-400 hover:text-white';
+      });
+      document.getElementById(`tab-content-${tab}`).classList.remove('hidden');
+      document.getElementById(`tab-btn-${tab}`).className = 'tab-active px-3 py-1 font-medium text-[11px]';
+    }
+
+    function logJournal(msg) {
+      const el = document.getElementById('journal-logs');
+      const time = new Date().toLocaleTimeString();
+      el.innerHTML = `<div><span class="text-gray-500">[${time}]</span> ${msg}</div>` + el.innerHTML;
+    }
+
+    function setTimeframe(tf) {
+      const map = { '1s': 1, '5s': 5, '15s': 15, '1m': 60 };
+      timeframeSeconds = map[tf] || 1;
+      document.querySelectorAll('.tf-btn').forEach(b => {
+        b.className = 'tf-btn px-2 py-0.5 rounded text-[11px] font-medium text-gray-400 hover:text-white';
+      });
+      event.target.className = 'tf-btn px-2 py-0.5 rounded text-[11px] font-medium text-blue-400 bg-[#181f2a]';
+      initCandles(engine.lastPrice);
+      drawChart();
+    }
+
+    function toggleIndicator(ind) {
+      if (ind === 'ma') {
+        showMA = !showMA;
+        document.getElementById('btn-ma').className = showMA
+          ? 'px-2 py-0.5 rounded bg-blue-900/30 text-blue-300 border border-blue-500/40 text-[11px]'
+          : 'px-2 py-0.5 rounded text-gray-400 hover:text-white border border-transparent text-[11px]';
+        drawChart();
       }
     }
 
-    function resetOrderBook() {
-      if (simInterval) toggleSimulation();
-      book.bids.clear();
-      book.asks.clear();
-      book.orders.clear();
-      book.trades = [];
-      book.totalVolume = 0;
-      book.lastPrice = 100;
-      injectSpreadQuotes();
+    function setChartType(t) {
+      chartMode = t;
+      document.getElementById('ct-candle').className = t === 'candle' ? 'px-2 py-0.5 rounded bg-[#181f2a] text-blue-400 border mt-border' : 'px-2 py-0.5 rounded hover:text-white border border-transparent';
+      document.getElementById('ct-line').className = t === 'line' ? 'px-2 py-0.5 rounded bg-[#181f2a] text-blue-400 border mt-border' : 'px-2 py-0.5 rounded hover:text-white border border-transparent';
+      drawChart();
     }
 
-    // Initial setup with healthy spread
-    injectSpreadQuotes();
+    function openOrderModal() {
+      document.getElementById('order-modal').classList.remove('hidden');
+      document.getElementById('modal-price').value = engine.lastPrice.toFixed(0);
+    }
+    function closeOrderModal() {
+      document.getElementById('order-modal').classList.add('hidden');
+    }
+    function toggleModalFields() {
+      const type = document.getElementById('modal-type').value;
+      document.getElementById('modal-price-group').classList.toggle('hidden', type !== 'LIMIT');
+    }
+
+    function submitModalOrder(side) {
+      const type = document.getElementById('modal-type').value;
+      const lots = parseFloat(document.getElementById('modal-volume').value) || 1.0;
+      const qty = Math.round(lots * 10);
+      const price = type === 'LIMIT' ? parseFloat(document.getElementById('modal-price').value) : null;
+      const sl = parseFloat(document.getElementById('modal-sl').value) || null;
+      const tp = parseFloat(document.getElementById('modal-tp').value) || null;
+      const ticket = ticketCounter++;
+
+      if (type === 'MARKET') {
+        const res = engine.processOrder(`mkt_${ticket}`, side, 'MARKET', qty);
+        if (res.trades.length > 0) {
+          const fill = res.trades[0].price;
+          account.positions.push({ ticket, time: new Date().toLocaleTimeString(), sym: 'BTCUSD', type: side, volume: lots, qty, openPrice: fill, sl, tp });
+          logJournal(`[F9 ORDER] #${ticket} ${side} ${lots} lots filled @ ${fill.toFixed(2)}`);
+        }
+      } else {
+        engine.processOrder(`lmt_${ticket}`, side, 'LIMIT', qty, price);
+        account.pendingOrders.push({ ticket, id: `lmt_${ticket}`, type: `${side} LIMIT`, volume: lots, price });
+        logJournal(`[F9 ORDER] #${ticket} Pending ${side} LIMIT ${lots} lots @ ${price}`);
+      }
+      closeOrderModal();
+      renderAll();
+    }
+
+    // Startup initialization
+    initSeedBook();
+    resizeCanvas();
+    renderAll();
+    logJournal('MetaTrader 5 Web Terminal initialized with Limit Order Book matching engine.');
   </script>
 </body>
 </html>
