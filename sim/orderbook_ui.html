@@ -161,7 +161,7 @@
         <!-- Sell Box -->
         <button onclick="quickTrade('SELL')" class="btn-sell text-white px-3 py-1.5 rounded-l text-left min-w-[78px] transition active:scale-95 shadow">
           <span class="block text-[10px] uppercase font-bold text-red-200">SELL</span>
-          <span id="oct-bid-price" class="font-mono text-xs font-black block">100.00</span>
+          <span id="oct-bid-price" class="font-mono text-xs font-black block">68418</span>
         </button>
 
         <!-- Volume Stepper -->
@@ -173,7 +173,7 @@
         <!-- Buy Box -->
         <button onclick="quickTrade('BUY')" class="btn-buy text-white px-3 py-1.5 rounded-r text-right min-w-[78px] transition active:scale-95 shadow">
           <span class="block text-[10px] uppercase font-bold text-green-200">BUY</span>
-          <span id="oct-ask-price" class="font-mono text-xs font-black block">100.05</span>
+          <span id="oct-ask-price" class="font-mono text-xs font-black block">68422</span>
         </button>
       </div>
 
@@ -355,7 +355,7 @@
 
         <div id="modal-price-group" class="hidden">
           <label class="block text-gray-400 text-[11px] mb-1">Limit Price (Ticks)</label>
-          <input id="modal-price" type="number" step="1" value="100" class="w-full bg-[#12161c] border mt-border rounded p-1.5 text-white font-mono focus:outline-none">
+          <input id="modal-price" type="number" step="1" value="68420" class="w-full bg-[#12161c] border mt-border rounded p-1.5 text-white font-mono focus:outline-none">
         </div>
 
         <div class="grid grid-cols-2 gap-2">
@@ -394,7 +394,7 @@
         this.trades = [];
         this.seq = 0;
         this.tradeId = 0;
-        this.lastPrice = 100.0;
+        this.lastPrice = 68420;
         this.totalVolume = 0;
       }
 
@@ -739,7 +739,7 @@
     }
 
     function quickLimitFromDOM(side) {
-      const price = side === 'BUY' ? (engine.getBestBid() || 100) - 1 : (engine.getBestAsk() || 100) + 1;
+      const price = side === 'BUY' ? (engine.getBestBid() || 68418) - 1 : (engine.getBestAsk() || 68422) + 1;
       const lots = 1.0;
       const qty = 10;
       const ticket = ticketCounter++;
@@ -801,8 +801,8 @@
     // 5. Render All MT5 Panels (DOM, Market Watch, Positions, Margin Bar)
     // =========================================================================
     function renderAll() {
-      const bb = engine.getBestBid() || 100.0;
-      const ba = engine.getBestAsk() || 100.2;
+      const bb = engine.getBestBid() || 68418;
+      const ba = engine.getBestAsk() || 68422;
       const spread = Math.max(0, ba - bb);
 
       // 1. One-Click Trading Widget updates
@@ -935,7 +935,7 @@
     // 6. Bot Simulation (Algo Engine)
     // =========================================================================
     function stepAlgoEngine() {
-      const mid = engine.lastPrice || 100;
+      const mid = engine.lastPrice || 68420;
       const p = Math.random();
 
       if (p < 0.60) {
