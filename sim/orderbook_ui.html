@@ -1,7 +1,558 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta charset="UTF-8"><!DOCTYPE html>
+<html lang="en">
+<head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Limit Order Book - MT5 Web Terminal</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { background-color: #0b0e11; color: #d1d4dc; font-family: sans-serif; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-size: 12px; user-select: none; }
+    .mt-border { border-color: #2a2e39; }
+    header { height: 36px; background: #131722; border-bottom: 1px solid #2a2e39; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
+    .toolbar { height: 32px; background: #181c27; border-bottom: 1px solid #2a2e39; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
+    .main-area { flex: 1; display: flex; overflow: hidden; }
+    .left-panel { width: 320px; border-right: 1px solid #2a2e39; display: flex; flex-direction: column; background: #131722; }
+    .center-panel { flex: 1; display: flex; flex-direction: column; background: #0b0e11; position: relative; }
+    .bottom-panel { height: 180px; border-top: 1px solid #2a2e39; background: #131722; display: flex; flex-direction: column; }
+    button { cursor: pointer; border: 1px solid transparent; background: transparent; color: #9ca3af; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+    button:hover { color: #ffffff; }
+    select, input { background: #1e222d; color: #ffffff; border: 1px solid #2a2e39; border-radius: 4px; padding: 2px 6px; font-size: 11px; outline: none; }
+    select:hover, input:hover { border-color: #3b82f6; }
+    .flex { display: flex; }
+    .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .space-x-1 > * + * { margin-left: 4px; }
+    .space-x-2 > * + * { margin-left: 8px; }
+    .space-x-3 > * + * { margin-left: 12px; }
+    .font-bold { font-weight: bold; }
+    .font-mono { font-family: monospace; }
+    .text-emerald { color: #10b981; }
+    .text-rose { color: #ef4444; }
+    .text-blue { color: #3b82f6; }
+    .bg-emerald { background-color: #059669; color: white; }
+    .bg-rose { background-color: #e11d48; color: white; }
+    .divider { width: 1px; height: 16px; background: #374151; margin: 0 6px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #131722; }
+    ::-webkit-scrollbar-thumb { background: #2a2e39; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="flex items-center space-x-3">
+      <span class="font-bold text-blue" style="font-size: 14px;">MetaTrader 5 LOB</span>
+      <div class="divider"></div>
+      <div class="flex items-center">
+        <label style="color: #9ca3af; font-weight: 600; margin-right: 6px;">Symbol:</label>
+        <select id="symbol-select" onchange="onSymbolChange(this.value)">
+          <option value="BTCUSD" selected>BTCUSD</option>
+          <option value="ETHUSD">ETHUSD</option>
+          <option value="XAUUSD">XAUUSD</option>
+          <option value="EURUSD">EURUSD</option>
+          <option value="GBPUSD">GBPUSD</option>
+          <option value="USDJPY">USDJPY</option>
+          <option value="US500">US500</option>
+          <option value="NAS100">NAS100</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex items-center space-x-3" style="color: #9ca3af; font-size: 11px;">
+      <span style="color: #34d399;">● Connected</span>
+      <span>Latency: <span class="font-mono" style="color: #fff;">12ms</span></span>
+    </div>
+  </header>
+
+  <!-- Toolbar / Secondary Ribbon -->
+  <div class="toolbar">
+    <div class="flex items-center space-x-2">
+      <span style="color: #9ca3af; font-weight: 500;">TF:</span>
+      <button style="background: #2563eb; color: #fff; font-weight: bold;">1s</button>
+      <button>5s</button>
+      <button>15s</button>
+
+      <div class="divider"></div>
+
+      <!-- Chart Style Toggles -->
+      <span style="color: #9ca3af; font-weight: 500;">Style:</span>
+      <div class="flex space-x-1">
+        <button onclick="setChartType('candles')" id="ct-candles" style="background: rgba(37,99,235,0.3); color: #60a5fa; border: 1px solid rgba(59,130,246,0.5); font-weight: bold;">Candles</button>
+        <button onclick="setChartType('area')" id="ct-area">Area</button>
+        <button onclick="setChartType('bars')" id="ct-bars">Bars</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Indicators -->
+      <span style="color: #9ca3af; font-weight: 500;">Indicators:</span>
+      <div class="flex space-x-1">
+        <button onclick="toggleIndicator('ma')" id="btn-ma">MA(20)</button>
+        <button onclick="toggleIndicator('bb')" id="btn-bb">BB(20,2)</button>
+        <button onclick="toggleIndicator('rsi')" id="btn-rsi">RSI(14)</button>
+      </div>
+    </div>
+
+    <!-- Quick Trade buttons -->
+    <div class="flex items-center space-x-2">
+      <button onclick="openOrderModal('BUY')" class="bg-emerald" style="font-weight: bold; padding: 3px 12px;">BUY</button>
+      <button onclick="openOrderModal('SELL')" class="bg-rose" style="font-weight: bold; padding: 3px 12px;">SELL</button>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="main-area">
+    <!-- Left Panel: Order Book & Depth -->
+    <div class="left-panel">
+      <!-- Symbol Header & Spread -->
+      <div style="padding: 8px; border-bottom: 1px solid #2a2e39; display: flex; justify-content: space-between; align-items: center; background: #181c27;">
+        <div>
+          <span id="active-symbol-badge" class="font-bold" style="color: #fff; font-size: 13px;">BTCUSD</span>
+          <span style="color: #9ca3af; font-size: 10px; display: block;">Limit Order Book</span>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 11px; color: #9ca3af;">Spread: <span id="spread-val" class="font-mono" style="color: #facc15;">0.40</span></div>
+          <div style="font-size: 10px; color: #6b7280;">Mid: <span id="mid-price-val" class="font-mono" style="color: #fff;">68420.00</span></div>
+        </div>
+      </div>
+
+      <!-- Orderbook Tables -->
+      <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 4px;">
+        <!-- Asks (Sells) -->
+        <div style="flex: 1; overflow-y: auto;">
+          <div class="font-bold text-rose" style="font-size: 10px; padding: 2px; display: flex; justify-content: space-between; border-bottom: 1px solid rgba(225,29,72,0.3);">
+            <span>ASK (SELL)</span><span>SIZE</span><span>TOTAL</span>
+          </div>
+          <div id="asks-list" class="font-mono" style="font-size: 11px;"></div>
+        </div>
+
+        <!-- Current Price Divider -->
+        <div style="padding: 4px 8px; margin: 4px 0; background: #1e222d; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #2a2e39;">
+          <span id="last-price" class="font-bold text-emerald font-mono" style="font-size: 14px;">68420.00</span>
+          <span id="price-change" class="text-emerald font-mono" style="font-size: 11px;">+0.42%</span>
+        </div>
+
+        <!-- Bids (Buys) -->
+        <div style="flex: 1; overflow-y: auto;">
+          <div class="font-bold text-emerald" style="font-size: 10px; padding: 2px; display: flex; justify-content: space-between; border-bottom: 1px solid rgba(16,185,129,0.3);">
+            <span>BID (BUY)</span><span>SIZE</span><span>TOTAL</span>
+          </div>
+          <div id="bids-list" class="font-mono" style="font-size: 11px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Panel: Interactive Canvas Chart -->
+    <div class="center-panel">
+      <div id="chart-container" style="flex: 1; position: relative; width: 100%; height: 100%;">
+        <canvas id="chart-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+      </div>
+
+      <!-- Bottom Panel: Positions & Orders -->
+      <div class="bottom-panel">
+        <div style="display: flex; border-bottom: 1px solid #2a2e39; background: #181c27; color: #9ca3af;">
+          <button style="color: #fff; border-bottom: 2px solid #3b82f6; font-weight: 600; padding: 6px 12px; border-radius: 0;">Positions (0)</button>
+          <button style="padding: 6px 12px;">Pending Orders (0)</button>
+          <button style="padding: 6px 12px;">Trade History</button>
+        </div>
+        <div style="flex: 1; overflow: auto; padding: 4px;" class="font-mono">
+          <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 11px;">
+            <thead>
+              <tr style="color: #6b7280; border-bottom: 1px solid #2a2e39; font-size: 10px;">
+                <th style="padding: 4px;">Ticket</th>
+                <th style="padding: 4px;">Time</th>
+                <th style="padding: 4px;">Symbol</th>
+                <th style="padding: 4px;">Type</th>
+                <th style="padding: 4px;">Volume</th>
+                <th style="padding: 4px;">Price</th>
+                <th style="padding: 4px;">S/L</th>
+                <th style="padding: 4px;">T/P</th>
+                <th style="padding: 4px;">P/L</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="9" style="padding: 12px; text-align: center; color: #4b5563;">No open positions</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SYMBOL_PRICES = {
+      'BTCUSD': 68420,
+      'ETHUSD': 2540,
+      'XAUUSD': 2745,
+      'EURUSD': 1.0845,
+      'GBPUSD': 1.2960,
+      'USDJPY': 152.85,
+      'US500': 5820,
+      'NAS100': 20380
+    };
+
+    let currentSymbol = 'BTCUSD';
+    let basePrice = SYMBOL_PRICES[currentSymbol];
+    let chartType = 'candles';
+    let indicators = { ma: false, bb: false, rsi: false };
+    let candles = [];
+
+    class OrderBookEngine {
+      constructor() {
+        this.bids = [];
+        this.asks = [];
+      }
+      seed(price) {
+        this.bids = [];
+        this.asks = [];
+        const step = price > 100 ? (price > 5000 ? 1.0 : 0.1) : 0.0001;
+        for (let i = 1; i <= 10; i++) {
+          const bp = price - i * step;
+          const ap = price + i * step;
+          this.bids.push({ price: bp, qty: Math.floor(Math.random() * 25 + 5) });
+          this.asks.push({ price: ap, qty: Math.floor(Math.random() * 25 + 5) });
+        }
+        this.bids.sort((a,b) => b.price - a.price);
+        this.asks.sort((a,b) => a.price - b.price);
+      }
+    }
+
+    const engine = new OrderBookEngine();
+
+    function initCandles(price) {
+      candles = [];
+      let p = price;
+      const step = price > 100 ? (price > 5000 ? 5.0 : 0.5) : 0.0005;
+      for (let i = 0; i < 60; i++) {
+        const change = (Math.random() - 0.49) * step * 2;
+        const open = p;
+        const close = open + change;
+        const high = Math.max(open, close) + Math.random() * step;
+        const low = Math.min(open, close) - Math.random() * step;
+        candles.push({ open, high, low, close });
+        p = close;
+      }
+    }
+
+    function initSeedBook(price) {
+      basePrice = price;
+      engine.seed(basePrice);
+    }
+
+    function onSymbolChange(sym) {
+      currentSymbol = sym;
+      basePrice = SYMBOL_PRICES[sym] || 100;
+      const badge = document.getElementById('active-symbol-badge');
+      if (badge) badge.innerText = sym;
+      initSeedBook(basePrice);
+      initCandles(basePrice);
+      renderAll();
+    }
+
+    function setChartType(type) {
+      chartType = type;
+      ['candles', 'area', 'bars'].forEach(t => {
+        const btn = document.getElementById('ct-' + t);
+        if (btn) {
+          if (t === type) {
+            btn.style.background = 'rgba(37,99,235,0.3)';
+            btn.style.color = '#60a5fa';
+            btn.style.border = '1px solid rgba(59,130,246,0.5)';
+            btn.style.fontWeight = 'bold';
+          } else {
+            btn.style.background = 'transparent';
+            btn.style.color = '#9ca3af';
+            btn.style.border = '1px solid transparent';
+            btn.style.fontWeight = 'normal';
+          }
+        }
+      });
+      drawChart();
+    }
+
+    function toggleIndicator(ind) {
+      indicators[ind] = !indicators[ind];
+      const btn = document.getElementById('btn-' + ind);
+      if (btn) {
+        if (indicators[ind]) {
+          if (ind === 'bb') {
+            btn.style.background = 'rgba(147,51,234,0.3)';
+            btn.style.color = '#c084fc';
+            btn.style.border = '1px solid rgba(168,85,247,0.5)';
+          } else if (ind === 'rsi') {
+            btn.style.background = 'rgba(234,88,12,0.3)';
+            btn.style.color = '#fb923c';
+            btn.style.border = '1px solid rgba(249,115,22,0.5)';
+          } else {
+            btn.style.background = 'rgba(37,99,235,0.3)';
+            btn.style.color = '#60a5fa';
+            btn.style.border = '1px solid rgba(59,130,246,0.5)';
+          }
+          btn.style.fontWeight = 'bold';
+        } else {
+          btn.style.background = 'transparent';
+          btn.style.color = '#9ca3af';
+          btn.style.border = '1px solid transparent';
+          btn.style.fontWeight = 'normal';
+        }
+      }
+      drawChart();
+    }
+
+    function drawChart() {
+      const canvas = document.getElementById('chart-canvas');
+      const container = document.getElementById('chart-container');
+      if (!canvas || !container) return;
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (candles.length === 0) return;
+
+      const rsiPanelHeight = indicators.rsi ? Math.floor(canvas.height * 0.25) : 0;
+      const mainHeight = canvas.height - rsiPanelHeight;
+
+      let minP = Infinity, maxP = -Infinity;
+      candles.forEach(c => {
+        if (c.low < minP) minP = c.low;
+        if (c.high > maxP) maxP = c.high;
+      });
+      const rangeP = (maxP - minP) || 1;
+      const pad = rangeP * 0.05;
+      const pMin = minP - pad;
+      const pMax = maxP + pad;
+
+      function toY(val) {
+        return mainHeight - ((val - pMin) / (pMax - pMin)) * (mainHeight - 30) - 15;
+      }
+
+      ctx.strokeStyle = '#1e222d';
+      ctx.lineWidth = 1;
+      for (let i = 1; i <= 4; i++) {
+        const y = (mainHeight / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      const barWidth = Math.max(2, (canvas.width / candles.length) * 0.7);
+      const stepX = canvas.width / candles.length;
+
+      if (chartType === 'area') {
+        ctx.beginPath();
+        candles.forEach((c, i) => {
+          const x = i * stepX + stepX / 2;
+          const y = toY(c.close);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        const grad = ctx.createLinearGradient(0, 0, 0, mainHeight);
+        grad.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+        grad.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+        ctx.lineTo((candles.length - 1) * stepX + stepX / 2, mainHeight);
+        ctx.lineTo(stepX / 2, mainHeight);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+      } else if (chartType === 'bars') {
+        candles.forEach((c, i) => {
+          const x = i * stepX + stepX / 2;
+          const isUp = c.close >= c.open;
+          ctx.strokeStyle = isUp ? '#10b981' : '#ef4444';
+          ctx.lineWidth = 1.5;
+
+          ctx.beginPath();
+          ctx.moveTo(x, toY(c.high));
+          ctx.lineTo(x, toY(c.low));
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(x - barWidth / 2, toY(c.open));
+          ctx.lineTo(x, toY(c.open));
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(x, toY(c.close));
+          ctx.lineTo(x + barWidth / 2, toY(c.close));
+          ctx.stroke();
+        });
+      } else {
+        candles.forEach((c, i) => {
+          const x = i * stepX + stepX / 2;
+          const isUp = c.close >= c.open;
+          const color = isUp ? '#10b981' : '#ef4444';
+          ctx.strokeStyle = color;
+          ctx.fillStyle = color;
+          ctx.lineWidth = 1;
+
+          ctx.beginPath();
+          ctx.moveTo(x, toY(c.high));
+          ctx.lineTo(x, toY(c.low));
+          ctx.stroke();
+
+          const topY = toY(Math.max(c.open, c.close));
+          const botY = toY(Math.min(c.open, c.close));
+          const h = Math.max(2, botY - topY);
+          ctx.fillRect(x - barWidth / 2, topY, barWidth, h);
+        });
+      }
+
+      if (indicators.ma && candles.length >= 20) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 1.5;
+        for (let i = 19; i < candles.length; i++) {
+          let sum = 0;
+          for (let k = i - 19; k <= i; k++) sum += candles[k].close;
+          const ma = sum / 20;
+          const x = i * stepX + stepX / 2;
+          const y = toY(ma);
+          if (i === 19) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      if (indicators.bb && candles.length >= 20) {
+        const upperPts = [], lowerPts = [], midPts = [];
+        for (let i = 19; i < candles.length; i++) {
+          let sum = 0;
+          for (let k = i - 19; k <= i; k++) sum += candles[k].close;
+          const sma = sum / 20;
+          let variance = 0;
+          for (let k = i - 19; k <= i; k++) variance += Math.pow(candles[k].close - sma, 2);
+          const std = Math.sqrt(variance / 20);
+          const x = i * stepX + stepX / 2;
+          midPts.push({ x, y: toY(sma) });
+          upperPts.push({ x, y: toY(sma + 2 * std) });
+          lowerPts.push({ x, y: toY(sma - 2 * std) });
+        }
+
+        ctx.strokeStyle = '#a855f7';
+        ctx.lineWidth = 1.2;
+
+        ctx.beginPath();
+        upperPts.forEach((p, idx) => { if (idx === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+        ctx.stroke();
+
+        ctx.beginPath();
+        lowerPts.forEach((p, idx) => { if (idx === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+        ctx.stroke();
+
+        ctx.strokeStyle = '#c084fc';
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        midPts.forEach((p, idx) => { if (idx === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      if (indicators.rsi) {
+        const rsiY0 = mainHeight;
+        ctx.fillStyle = '#131722';
+        ctx.fillRect(0, rsiY0, canvas.width, rsiPanelHeight);
+
+        ctx.strokeStyle = '#2a2e39';
+        ctx.beginPath();
+        ctx.moveTo(0, rsiY0);
+        ctx.lineTo(canvas.width, rsiY0);
+        ctx.stroke();
+
+        const y70 = rsiY0 + rsiPanelHeight * 0.3;
+        const y30 = rsiY0 + rsiPanelHeight * 0.7;
+
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+        ctx.beginPath(); ctx.moveTo(0, y70); ctx.lineTo(canvas.width, y70); ctx.stroke();
+        ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
+        ctx.beginPath(); ctx.moveTo(0, y30); ctx.lineTo(canvas.width, y30); ctx.stroke();
+
+        let lastRSI = 50;
+        if (candles.length >= 15) {
+          ctx.beginPath();
+          ctx.strokeStyle = '#f97316';
+          ctx.lineWidth = 1.5;
+
+          for (let i = 14; i < candles.length; i++) {
+            let gains = 0, losses = 0;
+            for (let k = i - 13; k <= i; k++) {
+              const diff = candles[k].close - candles[k-1].close;
+              if (diff >= 0) gains += diff;
+              else losses -= diff;
+            }
+            const avgG = gains / 14;
+            const avgL = losses / 14;
+            const rs = avgL === 0 ? 100 : avgG / avgL;
+            const rsi = 100 - (100 / (1 + rs));
+            lastRSI = rsi;
+
+            const x = i * stepX + stepX / 2;
+            const y = rsiY0 + (1 - rsi / 100) * rsiPanelHeight;
+            if (i === 14) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = '#f97316';
+        ctx.font = '10px monospace';
+        ctx.fillText(`RSI(14): ${lastRSI.toFixed(1)}`, 10, rsiY0 + 15);
+      }
+    }
+
+    function renderOrderBook() {
+      const asksDiv = document.getElementById('asks-list');
+      const bidsDiv = document.getElementById('bids-list');
+      if (!asksDiv || !bidsDiv) return;
+
+      const dec = basePrice > 100 ? 2 : 4;
+      let askHtml = '', bidHtml = '';
+      let askTot = 0, bidTot = 0;
+
+      engine.asks.slice(0, 8).reverse().forEach(a => {
+        askTot += a.qty;
+        askHtml += `<div style="display: flex; justify-content: space-between; padding: 2px 4px; color: #fca5a5;">
+          <span>${a.price.toFixed(dec)}</span><span>${a.qty}</span><span>${askTot}</span>
+        </div>`;
+      });
+
+      engine.bids.slice(0, 8).forEach(b => {
+        bidTot += b.qty;
+        bidHtml += `<div style="display: flex; justify-content: space-between; padding: 2px 4px; color: #6ee7b7;">
+          <span>${b.price.toFixed(dec)}</span><span>${b.qty}</span><span>${bidTot}</span>
+        </div>`;
+      });
+
+      asksDiv.innerHTML = askHtml;
+      bidsDiv.innerHTML = bidHtml;
+
+      const lastP = document.getElementById('last-price');
+      if (lastP) lastP.innerText = basePrice.toFixed(dec);
+      const midP = document.getElementById('mid-price-val');
+      if (midP) midP.innerText = basePrice.toFixed(dec);
+    }
+
+    function renderAll() {
+      renderOrderBook();
+      drawChart();
+    }
+
+    window.addEventListener('resize', drawChart);
+
+    initSeedBook(68420);
+    initCandles(68420);
+    renderAll();
+  </script>
+</body>
+</html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MetaTrader 5 Web Terminal - LOB Engine</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
