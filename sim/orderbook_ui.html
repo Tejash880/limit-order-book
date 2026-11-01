@@ -535,18 +535,19 @@
 
     // Symbols list for Market Watch
     const symbols = [
-      { sym: 'BTCUSD',// Updated MT5 Pro Terminal symbols: BTCUSD 68420, ETHUSD 2540, XAUUSD 2745, EURUSD 1.0845, GBPUSD 1.2960, USDJPY 152.85, US500 5820, NAS100 20380
-       bid: 100.0, ask: 100.2, spread: 2 },
-      { sym: 'ETHUSD', bid: 3200.5, ask: 3201.0, spread: 5 },
-      { sym: 'EURUSD', bid: 1.0850, ask: 1.0852, spread: 2 },
-      { sym: 'XAUUSD', bid: 2350.2, ask: 2350.6, spread: 4 },
-      { sym: 'US500',  bid: 5200.0, ask: 5200.8, spread: 8 },
-      { sym: 'NVDA',   bid: 124.50, ask: 124.60, spread: 10 },
-    ];
+      { sym: 'BTCUSD', bid: 68418, ask: 68422, spread: 4 },
+     { sym: 'ETHUSD', bid: 2539, ask: 2541, spread: 2 },
+     { sym: 'XAUUSD', bid: 2744, ask: 2746, spread: 2 },
+     { sym: 'EURUSD', bid: 1.0844, ask: 1.0846, spread: 2 },
+     { sym: 'GBPUSD', bid: 1.2959, ask: 1.2961, spread: 2 },
+     { sym: 'USDJPY', bid: 152.84, ask: 152.86, spread: 2 },
+     { sym: 'US500', bid: 5819, ask: 5821, spread: 2 },
+     { sym: 'NAS100', bid: 20378, ask: 20382, spread: 4 }
+     ];
 
     // Initialize initial seed liquidity
     function initSeedBook() {
-      const base = 100;
+       const base = 68420;
       for (let i = 1; i <= 6; i++) {
         engine.processOrder(`seed_b_${i}`, 'BUY', 'LIMIT', Math.floor(Math.random() * 20 + 5), base - i);
         engine.processOrder(`seed_a_${i}`, 'SELL', 'LIMIT', Math.floor(Math.random() * 20 + 5), base + i);
